@@ -101,34 +101,45 @@ class Repository {
     throw Exception('Bad date: $v');
   }
 
-  Future<Chat> createDirectChat(String userId, String otherUserId) async {
-    final existing = await db.query('''
-      SELECT c.id FROM chats c
-      WHERE c.is_group = false
-        AND EXISTS (SELECT 1 FROM chat_members WHERE chat_id = c.id AND user_id = @a)
-        AND EXISTS (SELECT 1 FROM chat_members WHERE chat_id = c.id AND user_id = @b)
-      LIMIT 1
+  Future<Chat> createDirectChat(String userId, String otherUserId, {AppUser? me, AppUser? other}) async {
+    // Single round-trip: find-or-create the direct chat. Uses CTEs so we
+    // only pay one Neon hop instead of 4.
+    final rows = await db.query('''
+      WITH existing AS (
+        SELECT c.id, c.is_group, c.title, c.avatar_url, c.created_at, false AS just_created
+        FROM chats c
+        WHERE c.is_group = false
+          AND EXISTS (SELECT 1 FROM chat_members WHERE chat_id = c.id AND user_id = @a)
+          AND EXISTS (SELECT 1 FROM chat_members WHERE chat_id = c.id AND user_id = @b)
+        LIMIT 1
+      ),
+      new_chat AS (
+        INSERT INTO chats (is_group, created_by)
+        SELECT false, @a
+        WHERE NOT EXISTS (SELECT 1 FROM existing)
+        RETURNING id, is_group, title, avatar_url, created_at, true AS just_created
+      ),
+      new_members AS (
+        INSERT INTO chat_members (chat_id, user_id)
+        SELECT id, uid FROM new_chat, unnest(ARRAY[@a, @b]::uuid[]) AS uid
+        ON CONFLICT DO NOTHING
+        RETURNING chat_id
+      )
+      SELECT * FROM existing
+      UNION ALL
+      SELECT id, is_group, title, avatar_url, created_at, just_created FROM new_chat
     ''', params: {'a': userId, 'b': otherUserId});
-    String chatId;
-    if (existing.isNotEmpty) {
-      chatId = existing.first['id'].toString();
-    } else {
-      final c = await db.query(
-        'INSERT INTO chats (is_group, created_by) VALUES (false, @u) RETURNING id',
-        params: {'u': userId},
-      );
-      chatId = c.first['id'].toString();
-      await db.query(
-        'INSERT INTO chat_members (chat_id, user_id) VALUES (@c, @a)',
-        params: {'c': chatId, 'a': userId},
-      );
-      await db.query(
-        'INSERT INTO chat_members (chat_id, user_id) VALUES (@c, @b) ON CONFLICT DO NOTHING',
-        params: {'c': chatId, 'b': otherUserId},
-      );
-    }
-    final chats = await listChatsFor(userId);
-    return chats.firstWhere((c) => c.id == chatId);
+
+    final row = rows.first;
+    final members = (me != null && other != null) ? [me, other] : <AppUser>[];
+    return Chat(
+      id: row['id'].toString(),
+      isGroup: row['is_group'] as bool,
+      title: row['title'] as String?,
+      avatarUrl: row['avatar_url'] as String?,
+      createdAt: _parseDate(row['created_at']),
+      members: members,
+    );
   }
 
   Future<Chat> createGroupChat(String userId, String title, List<String> memberIds) async {

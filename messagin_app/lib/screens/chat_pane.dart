@@ -70,12 +70,16 @@ class _ChatPaneState extends State<ChatPane> {
   Future<void> _load() async {
     final repo = context.read<AppState>().repo;
     try {
-      final msgs = await repo.listMessages(widget.chat.id);
-      final reactions = await repo.reactionsForChat(widget.chat.id);
+      // Run messages + reactions in parallel (single Neon connection
+      // pipelines them ~back-to-back instead of full RTT each).
+      final results = await Future.wait([
+        repo.listMessages(widget.chat.id),
+        repo.reactionsForChat(widget.chat.id),
+      ]);
       if (!mounted) return;
       setState(() {
-        _messages = msgs;
-        _reactionsByMsg = _groupReactions(reactions);
+        _messages = results[0] as List<Message>;
+        _reactionsByMsg = _groupReactions(results[1] as List<Reaction>);
         _loading = false;
       });
       _scrollToBottom();

@@ -103,7 +103,8 @@ class _NewChatScreenState extends State<NewChatScreen> {
 
   Future<void> _startDirect(AppUser other) async {
     final state = context.read<AppState>();
-    final chat = await state.repo.createDirectChat(state.me!.id, other.id);
+    final me = state.me!;
+    final chat = await state.repo.createDirectChat(me.id, other.id, me: me, other: other);
     if (!mounted) return;
     Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => ChatScreen(chat: chat)));
   }
