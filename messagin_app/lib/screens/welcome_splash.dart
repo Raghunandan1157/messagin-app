@@ -4,6 +4,11 @@ import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/avatar.dart';
 
+const _bgLight = Color(0xFFFAFAF7);
+const _ink = Color(0xFF0A1310);
+const _inkMuted = Color(0xFF5C6660);
+const _border = Color(0xFFD8D6D0);
+
 class WelcomeSplash extends StatefulWidget {
   final VoidCallback onDone;
   const WelcomeSplash({super.key, required this.onDone});
@@ -13,17 +18,14 @@ class WelcomeSplash extends StatefulWidget {
 }
 
 class _WelcomeSplashState extends State<WelcomeSplash> with TickerProviderStateMixin {
-  late final AnimationController _avatar;
-  late final AnimationController _text;
+  late final AnimationController _enter;
+  late final AnimationController _bar;
 
   @override
   void initState() {
     super.initState();
-    _avatar = AnimationController(vsync: this, duration: const Duration(milliseconds: 700))..forward();
-    _text = AnimationController(vsync: this, duration: const Duration(milliseconds: 800));
-    Future.delayed(const Duration(milliseconds: 350), () {
-      if (mounted) _text.forward();
-    });
+    _enter = AnimationController(vsync: this, duration: const Duration(milliseconds: 600))..forward();
+    _bar = AnimationController(vsync: this, duration: const Duration(milliseconds: 2200))..forward();
     Future.delayed(const Duration(milliseconds: 2400), () {
       if (mounted) widget.onDone();
     });
@@ -31,18 +33,18 @@ class _WelcomeSplashState extends State<WelcomeSplash> with TickerProviderStateM
 
   @override
   void dispose() {
-    _avatar.dispose();
-    _text.dispose();
+    _enter.dispose();
+    _bar.dispose();
     super.dispose();
   }
 
   String _greeting() {
     final h = DateTime.now().hour;
-    if (h < 5) return 'Hey night owl';
+    if (h < 5) return 'Welcome back';
     if (h < 12) return 'Good morning';
     if (h < 17) return 'Good afternoon';
     if (h < 21) return 'Good evening';
-    return 'Good night';
+    return 'Welcome back';
   }
 
   String _firstName(String full) {
@@ -60,200 +62,155 @@ class _WelcomeSplashState extends State<WelcomeSplash> with TickerProviderStateM
       return const SizedBox.shrink();
     }
     final contacts = state.contacts;
-    final sameRole = me.role == null
-        ? 0
-        : contacts.where((u) => u.role == me.role).length;
-    final sameLoc = me.location == null
-        ? 0
-        : contacts.where((u) => u.location == me.location).length;
+    final sameRole = me.role == null ? 0 : contacts.where((u) => u.role == me.role).length;
     final locations = contacts.map((u) => u.location).whereType<String>().toSet().length;
+
     return Scaffold(
-      body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: [WAColors.brandDark, WAColors.brand, Color(0xFF06CF9C)],
-          ),
-        ),
-        child: SafeArea(
-          child: Stack(children: [
-            // soft circles bg
-            Positioned(
-              top: -80,
-              right: -60,
-              child: _circle(220, Colors.white.withValues(alpha: 0.06)),
-            ),
-            Positioned(
-              bottom: -100,
-              left: -40,
-              child: _circle(260, Colors.white.withValues(alpha: 0.05)),
-            ),
-            Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  ScaleTransition(
-                    scale: CurvedAnimation(parent: _avatar, curve: Curves.elasticOut),
-                    child: Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.35), width: 3),
-                      ),
-                      child: LoopAvatar(initials: me.initials, size: 120),
+      backgroundColor: _bgLight,
+      body: Stack(children: [
+        Positioned.fill(child: CustomPaint(painter: _DotGridPainter())),
+        SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 28),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              const SizedBox(height: 24),
+              // Wordmark
+              Row(children: [
+                Container(
+                  width: 28, height: 28,
+                  decoration: BoxDecoration(color: WAColors.brandDark, borderRadius: BorderRadius.circular(7)),
+                  child: const Icon(Icons.all_inclusive, color: Colors.white, size: 16),
+                ),
+                const SizedBox(width: 8),
+                const Text('Messagin',
+                    style: TextStyle(color: _ink, fontSize: 15, fontWeight: FontWeight.w600, letterSpacing: -0.2)),
+              ]),
+              const Spacer(),
+              FadeTransition(
+                opacity: _enter,
+                child: SlideTransition(
+                  position: Tween<Offset>(begin: const Offset(0, 0.05), end: Offset.zero)
+                      .animate(CurvedAnimation(parent: _enter, curve: Curves.easeOutCubic)),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    LoopAvatar(initials: me.initials, size: 64),
+                    const SizedBox(height: 20),
+                    Text('${_greeting()},',
+                        style: const TextStyle(color: _inkMuted, fontSize: 15, fontWeight: FontWeight.w500)),
+                    const SizedBox(height: 4),
+                    Text(
+                      _firstName(me.name),
+                      style: const TextStyle(color: _ink, fontSize: 36, fontWeight: FontWeight.w700, letterSpacing: -0.8, height: 1.1),
                     ),
-                  ),
-                  const SizedBox(height: 28),
-                  FadeTransition(
-                    opacity: _text,
-                    child: SlideTransition(
-                      position: Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero)
-                          .animate(CurvedAnimation(parent: _text, curve: Curves.easeOut)),
-                      child: Column(children: [
-                        Text('${_greeting()},',
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.85),
-                              fontSize: 18,
-                              fontWeight: FontWeight.w400,
-                              letterSpacing: 0.3,
-                            )),
-                        const SizedBox(height: 6),
-                        Text(
-                          _firstName(me.name),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 38,
-                            fontWeight: FontWeight.w700,
-                            letterSpacing: -0.5,
-                          ),
-                        ),
-                        const SizedBox(height: 14),
-                        if (me.role != null || me.location != null)
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(20),
-                              border: Border.all(color: Colors.white.withValues(alpha: 0.25)),
-                            ),
-                            child: Text(
-                              me.tagline,
-                              style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w500),
-                            ),
-                          ),
-                        if (me.empId != null) ...[
-                          const SizedBox(height: 8),
-                          Text(
-                            me.empId!,
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.6),
-                              fontSize: 12,
-                              letterSpacing: 1.5,
-                              fontFamily: 'monospace',
-                            ),
-                          ),
+                    if (me.role != null || me.location != null) ...[
+                      const SizedBox(height: 10),
+                      Text(me.tagline,
+                          style: const TextStyle(color: _inkMuted, fontSize: 14, fontWeight: FontWeight.w500)),
+                    ],
+                    if (me.empId != null) ...[
+                      const SizedBox(height: 4),
+                      Text(me.empId!,
+                          style: const TextStyle(color: _inkMuted, fontSize: 12, letterSpacing: 1.2, fontFamily: 'monospace')),
+                    ],
+                    const SizedBox(height: 32),
+                    Container(height: 1, color: _border),
+                    const SizedBox(height: 20),
+                    if (contacts.isNotEmpty)
+                      Row(
+                        children: [
+                          _stat(contacts.length, 'directory'),
+                          _statDivider(),
+                          _stat(locations, 'locations'),
+                          if (me.role != null) ...[
+                            _statDivider(),
+                            _stat(sameRole, 'same role'),
+                          ],
                         ],
-                        const SizedBox(height: 28),
-                        if (contacts.isNotEmpty)
-                          Container(
-                            margin: const EdgeInsets.symmetric(horizontal: 32),
-                            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-                            decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.12),
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                _statBlock(contacts.length.toString(), 'colleagues'),
-                                _statDivider(),
-                                _statBlock(locations.toString(), 'locations'),
-                                if (me.role != null) ...[
-                                  _statDivider(),
-                                  _statBlock(sameRole.toString(), 'same role'),
-                                ],
-                                if (me.location != null && me.role == null) ...[
-                                  _statDivider(),
-                                  _statBlock(sameLoc.toString(), 'in ${me.location}'),
-                                ],
-                              ],
-                            ),
-                          ),
-                        const SizedBox(height: 24),
-                        Row(mainAxisSize: MainAxisSize.min, children: [
-                          Icon(Icons.lock_outline, size: 14, color: Colors.white.withValues(alpha: 0.75)),
-                          const SizedBox(width: 6),
-                          Text(
-                            'End-to-end encrypted',
-                            style: TextStyle(color: Colors.white.withValues(alpha: 0.75), fontSize: 12),
-                          ),
-                        ]),
-                      ]),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 32,
-              child: FadeTransition(
-                opacity: _text,
-                child: Center(
-                  child: TextButton(
-                    onPressed: widget.onDone,
-                    style: TextButton.styleFrom(foregroundColor: Colors.white),
-                    child: const Text('Continue →', style: TextStyle(fontSize: 14)),
-                  ),
+                      )
+                    else
+                      const Text('Loading directory...',
+                          style: TextStyle(color: _inkMuted, fontSize: 13)),
+                  ]),
                 ),
               ),
-            ),
-          ]),
+              const Spacer(),
+              // Progress bar
+              AnimatedBuilder(
+                animation: _bar,
+                builder: (_, _) => Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(children: [
+                    const Text('Preparing your workspace',
+                        style: TextStyle(color: _inkMuted, fontSize: 12, fontWeight: FontWeight.w500, letterSpacing: 0.3)),
+                    const Spacer(),
+                    Text('${(_bar.value * 100).toInt()}%',
+                        style: const TextStyle(
+                          color: _inkMuted, fontSize: 12, fontWeight: FontWeight.w600,
+                          fontFeatures: [FontFeature.tabularFigures()],
+                        )),
+                  ]),
+                  const SizedBox(height: 8),
+                  Container(
+                    height: 3,
+                    decoration: BoxDecoration(color: _border, borderRadius: BorderRadius.circular(3)),
+                    child: FractionallySizedBox(
+                      alignment: Alignment.centerLeft,
+                      widthFactor: _bar.value,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: WAColors.brandDark,
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                      ),
+                    ),
+                  ),
+                ]),
+              ),
+              const SizedBox(height: 24),
+            ]),
+          ),
         ),
-      ),
+      ]),
     );
   }
 
-  Widget _circle(double size, Color color) {
-    return Container(
-      width: size,
-      height: size,
-      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-    );
-  }
-
-  Widget _statBlock(String value, String label) {
-    final n = int.tryParse(value) ?? 0;
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      child: Column(mainAxisSize: MainAxisSize.min, children: [
+  Widget _stat(int n, String label) {
+    return Expanded(
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         TweenAnimationBuilder<double>(
           duration: const Duration(milliseconds: 1100),
           curve: Curves.easeOutCubic,
           tween: Tween(begin: 0, end: n.toDouble()),
-          builder: (_, v, __) => Text(
+          builder: (_, v, _) => Text(
             v.toInt().toString(),
-            style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w700),
+            style: const TextStyle(
+              color: _ink, fontSize: 28, fontWeight: FontWeight.w700, letterSpacing: -0.5,
+              fontFeatures: [FontFeature.tabularFigures()],
+            ),
           ),
         ),
         const SizedBox(height: 2),
-        Text(label, style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 11)),
+        Text(label,
+            style: const TextStyle(color: _inkMuted, fontSize: 11, fontWeight: FontWeight.w500, letterSpacing: 0.6)),
       ]),
     );
   }
 
   Widget _statDivider() {
-    return Container(
-      width: 1,
-      height: 28,
-      color: Colors.white.withValues(alpha: 0.25),
-    );
+    return Container(width: 1, height: 38, color: _border, margin: const EdgeInsets.symmetric(horizontal: 12));
   }
 }
 
+class _DotGridPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final p = Paint()..color = _border.withValues(alpha: 0.55);
+    const spacing = 24.0;
+    for (double y = 0; y < size.height; y += spacing) {
+      for (double x = 0; x < size.width; x += spacing) {
+        canvas.drawCircle(Offset(x, y), 0.7, p);
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter old) => false;
+}
