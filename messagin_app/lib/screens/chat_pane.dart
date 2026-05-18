@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:uuid/uuid.dart';
 import '../models/chat.dart';
 import '../models/message.dart';
 import '../models/reaction.dart';
@@ -9,6 +10,9 @@ import '../theme.dart';
 import '../widgets/avatar.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/reaction_picker.dart';
+import '../widgets/skeletons.dart';
+
+const _uuid = Uuid();
 
 class ChatPane extends StatefulWidget {
   final Chat chat;
@@ -29,6 +33,7 @@ class _ChatPaneState extends State<ChatPane> {
   bool _sending = false;
   bool _showEmojiPanel = false;
   bool _hasText = false;
+  bool _polling = false;
   Timer? _poll;
 
   @override
@@ -89,6 +94,8 @@ class _ChatPaneState extends State<ChatPane> {
   }
 
   Future<void> _pollNew() async {
+    if (_polling) return; // single-flight: drop overlapping polls
+    _polling = true;
     final repo = context.read<AppState>().repo;
     try {
       if (_messages.isNotEmpty) {
@@ -106,7 +113,10 @@ class _ChatPaneState extends State<ChatPane> {
       }
       final reactions = await repo.reactionsForChat(widget.chat.id);
       if (mounted) setState(() => _reactionsByMsg = _groupReactions(reactions));
-    } catch (_) {}
+    } catch (_) {
+    } finally {
+      _polling = false;
+    }
   }
 
   void _scrollToBottom() {
@@ -121,21 +131,42 @@ class _ChatPaneState extends State<ChatPane> {
   Future<void> _send() async {
     final text = _input.text.trim();
     if (text.isEmpty || _sending) return;
-    setState(() => _sending = true);
     final state = context.read<AppState>();
+    final me = state.me!;
+
+    // Optimistic: render the message immediately so the UI feels instant.
+    final tempId = 'local-${_uuid.v4()}';
+    final temp = Message(
+      id: tempId,
+      chatId: widget.chat.id,
+      senderId: me.id,
+      kind: 'text',
+      body: text,
+      createdAt: DateTime.now(),
+    );
+    _input.clear();
+    setState(() {
+      _messages.add(temp);
+      _hasText = false;
+      _sending = true;
+    });
+    _scrollToBottom();
+
     try {
-      final m = await state.repo.sendMessage(widget.chat.id, state.me!.id, text);
-      _input.clear();
+      final m = await state.repo.sendMessage(widget.chat.id, me.id, text);
       if (!mounted) return;
       setState(() {
-        _messages.add(m);
-        _hasText = false;
+        final i = _messages.indexWhere((x) => x.id == tempId);
+        if (i >= 0) {
+          _messages[i] = m;
+        } else {
+          _messages.add(m);
+        }
       });
-      _scrollToBottom();
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Send failed: $e')));
-      }
+      if (!mounted) return;
+      setState(() => _messages.removeWhere((x) => x.id == tempId));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Send failed: $e')));
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -238,7 +269,22 @@ class _ChatPaneState extends State<ChatPane> {
             ),
           ),
           child: _loading
-              ? const Center(child: CircularProgressIndicator())
+              ? ListView.builder(
+                  padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 60),
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: 6,
+                  itemBuilder: (_, i) {
+                    final mine = i.isOdd;
+                    final widths = [220.0, 160.0, 260.0, 180.0, 200.0, 140.0];
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2),
+                      child: MessageBubbleSkeleton(
+                        isMine: mine,
+                        width: widths[i % widths.length],
+                      ),
+                    );
+                  },
+                )
               : ListView.builder(
                   controller: _scroll,
                   padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 60),
@@ -358,10 +404,25 @@ class _ChatPaneState extends State<ChatPane> {
       if (_showEmojiPanel) _EmojiPanel(onTap: _insertEmoji),
     ]);
 
+    // Subtle fade-in on mount / chat switch (0.85 → 1.0 over 200ms).
+    final faded = AnimatedSwitcher(
+      duration: const Duration(milliseconds: 200),
+      transitionBuilder: (child, anim) {
+        return FadeTransition(
+          opacity: Tween<double>(begin: 0.85, end: 1.0).animate(anim),
+          child: child,
+        );
+      },
+      child: KeyedSubtree(
+        key: ValueKey(widget.chat.id),
+        child: body,
+      ),
+    );
+
     if (widget.embedded) {
-      return Container(color: WAColors.chatBgLight, child: body);
+      return Container(color: WAColors.chatBgLight, child: faded);
     }
-    return Scaffold(body: body);
+    return Scaffold(body: faded);
   }
 }
 

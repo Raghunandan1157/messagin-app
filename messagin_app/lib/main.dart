@@ -3,6 +3,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
 import 'screens/home_shell.dart';
 import 'screens/login_screen.dart';
+import 'screens/welcome_splash.dart';
 import 'state/app_state.dart';
 import 'theme.dart';
 
@@ -40,6 +41,9 @@ class _Root extends StatelessWidget {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     if (state.me == null) return const LoginScreen();
+    if (state.justSignedIn) {
+      return WelcomeSplash(onDone: () => context.read<AppState>().clearJustSignedIn());
+    }
     return const HomeShell();
   }
 }

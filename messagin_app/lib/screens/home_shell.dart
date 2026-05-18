@@ -5,6 +5,7 @@ import '../models/chat.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/avatar.dart';
+import '../widgets/skeletons.dart';
 import 'chat_pane.dart';
 import 'chat_screen.dart';
 import 'new_chat_screen.dart';
@@ -21,6 +22,7 @@ class _HomeShellState extends State<HomeShell> {
   List<Chat> _chats = [];
   Chat? _selected;
   bool _loading = true;
+  bool _polling = false;
   String? _err;
   Timer? _poll;
   String _filter = 'All';
@@ -30,7 +32,8 @@ class _HomeShellState extends State<HomeShell> {
   void initState() {
     super.initState();
     _load();
-    _poll = Timer.periodic(const Duration(seconds: 5), (_) => _load(silent: true));
+    // 10s (was 5s) + single-flight guard prevents pile-up on slow networks.
+    _poll = Timer.periodic(const Duration(seconds: 10), (_) => _load(silent: true));
   }
 
   @override
@@ -41,9 +44,11 @@ class _HomeShellState extends State<HomeShell> {
   }
 
   Future<void> _load({bool silent = false}) async {
+    if (_polling) return; // single-flight: drop overlapping polls
     final state = context.read<AppState>();
     final me = state.me;
     if (me == null) return;
+    _polling = true;
     try {
       final chats = await state.repo.listChatsFor(me.id);
       if (!mounted) return;
@@ -61,6 +66,8 @@ class _HomeShellState extends State<HomeShell> {
         _err = e.toString();
         _loading = false;
       });
+    } finally {
+      _polling = false;
     }
   }
 
@@ -237,7 +244,13 @@ class _HomeShellState extends State<HomeShell> {
   }
 
   Widget _chatListBody({required bool narrow}) {
-    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_loading) {
+      return ListView.builder(
+        physics: const NeverScrollableScrollPhysics(),
+        itemCount: 8,
+        itemBuilder: (_, i) => const ChatTileSkeleton(),
+      );
+    }
     if (_err != null) {
       return Padding(
         padding: const EdgeInsets.all(24),

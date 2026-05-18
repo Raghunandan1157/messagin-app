@@ -1,3 +1,4 @@
+import 'dart:convert';
 import '../models/chat.dart';
 import '../models/message.dart';
 import '../models/reaction.dart';
@@ -34,37 +35,70 @@ class Repository {
 
   Future<List<Chat>> listChatsFor(String userId) async {
     final rows = await db.query('''
-      SELECT c.*,
-        (SELECT m.body FROM messages m WHERE m.chat_id = c.id ORDER BY m.created_at DESC LIMIT 1) AS last_body,
-        (SELECT m.created_at FROM messages m WHERE m.chat_id = c.id ORDER BY m.created_at DESC LIMIT 1) AS last_at,
-        (SELECT m.sender_id FROM messages m WHERE m.chat_id = c.id ORDER BY m.created_at DESC LIMIT 1) AS last_sender
-      FROM chats c
-      JOIN chat_members cm ON cm.chat_id = c.id
-      WHERE cm.user_id = @uid
-      ORDER BY last_at DESC NULLS LAST, c.created_at DESC
+      WITH my_chats AS (
+        SELECT c.id, c.is_group, c.title, c.avatar_url, c.created_at
+        FROM chats c
+        JOIN chat_members cm ON cm.chat_id = c.id
+        WHERE cm.user_id = @uid
+      ),
+      last_msg AS (
+        SELECT DISTINCT ON (m.chat_id) m.chat_id, m.body, m.created_at AS last_at, m.sender_id
+        FROM messages m
+        WHERE m.chat_id IN (SELECT id FROM my_chats)
+        ORDER BY m.chat_id, m.created_at DESC
+      ),
+      members AS (
+        SELECT cm.chat_id,
+          json_agg(json_build_object(
+            'id', u.id, 'phone', u.phone, 'name', u.name,
+            'avatar_url', u.avatar_url, 'about', u.about,
+            'emp_id', u.emp_id, 'role', u.role, 'location', u.location
+          )) AS member_json
+        FROM chat_members cm
+        JOIN users u ON u.id = cm.user_id
+        WHERE cm.chat_id IN (SELECT id FROM my_chats)
+        GROUP BY cm.chat_id
+      )
+      SELECT c.*, lm.body AS last_body, lm.last_at, lm.sender_id AS last_sender, m.member_json
+      FROM my_chats c
+      LEFT JOIN last_msg lm ON lm.chat_id = c.id
+      LEFT JOIN members m ON m.chat_id = c.id
+      ORDER BY lm.last_at DESC NULLS LAST, c.created_at DESC
     ''', params: {'uid': userId});
 
     final chats = <Chat>[];
     for (final row in rows) {
-      final memRows = await db.query('''
-        SELECT u.* FROM users u
-        JOIN chat_members cm ON cm.user_id = u.id
-        WHERE cm.chat_id = @cid
-      ''', params: {'cid': row['id']});
-      final members = memRows.map(AppUser.fromRow).toList();
+      final raw = row['member_json'];
+      List<dynamic> memRows;
+      if (raw is String) {
+        memRows = jsonDecode(raw) as List;
+      } else if (raw is List) {
+        memRows = raw;
+      } else {
+        memRows = const [];
+      }
+      final members = memRows
+          .map((m) => AppUser.fromRow(Map<String, dynamic>.from(m as Map)))
+          .toList();
       chats.add(Chat(
         id: row['id'].toString(),
         isGroup: row['is_group'] as bool,
         title: row['title'] as String?,
         avatarUrl: row['avatar_url'] as String?,
-        createdAt: row['created_at'] as DateTime,
+        createdAt: _parseDate(row['created_at']),
         members: members,
         lastMessageBody: row['last_body'] as String?,
-        lastMessageAt: row['last_at'] as DateTime?,
+        lastMessageAt: row['last_at'] == null ? null : _parseDate(row['last_at']),
         lastMessageSenderId: row['last_sender']?.toString(),
       ));
     }
     return chats;
+  }
+
+  DateTime _parseDate(dynamic v) {
+    if (v is DateTime) return v;
+    if (v is String) return DateTime.parse(v);
+    throw Exception('Bad date: $v');
   }
 
   Future<Chat> createDirectChat(String userId, String otherUserId) async {
