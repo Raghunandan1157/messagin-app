@@ -229,14 +229,21 @@ class _WelcomeSplashState extends State<WelcomeSplash> with TickerProviderStateM
   }
 
   Widget _statBlock(String value, String label) {
+    final n = int.tryParse(value) ?? 0;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 10),
       child: Column(mainAxisSize: MainAxisSize.min, children: [
-        Text(value,
-            style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w700)),
+        TweenAnimationBuilder<double>(
+          duration: const Duration(milliseconds: 1100),
+          curve: Curves.easeOutCubic,
+          tween: Tween(begin: 0, end: n.toDouble()),
+          builder: (_, v, __) => Text(
+            v.toInt().toString(),
+            style: const TextStyle(color: Colors.white, fontSize: 22, fontWeight: FontWeight.w700),
+          ),
+        ),
         const SizedBox(height: 2),
-        Text(label,
-            style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 11)),
+        Text(label, style: TextStyle(color: Colors.white.withValues(alpha: 0.8), fontSize: 11)),
       ]),
     );
   }
