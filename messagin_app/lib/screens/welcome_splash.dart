@@ -24,9 +24,9 @@ class _WelcomeSplashState extends State<WelcomeSplash> with TickerProviderStateM
   @override
   void initState() {
     super.initState();
-    _enter = AnimationController(vsync: this, duration: const Duration(milliseconds: 600))..forward();
-    _bar = AnimationController(vsync: this, duration: const Duration(milliseconds: 2200))..forward();
-    Future.delayed(const Duration(milliseconds: 2400), () {
+    _enter = AnimationController(vsync: this, duration: const Duration(milliseconds: 700))..forward();
+    _bar = AnimationController(vsync: this, duration: const Duration(milliseconds: 3800))..forward();
+    Future.delayed(const Duration(milliseconds: 4400), () {
       if (mounted) widget.onDone();
     });
   }
@@ -164,7 +164,27 @@ class _WelcomeSplashState extends State<WelcomeSplash> with TickerProviderStateM
                   ),
                 ]),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 18),
+              // Tap-to-skip Continue
+              FadeTransition(
+                opacity: _enter,
+                child: SizedBox(
+                  width: double.infinity,
+                  child: TextButton(
+                    onPressed: widget.onDone,
+                    style: TextButton.styleFrom(
+                      foregroundColor: _ink,
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                    ),
+                    child: const Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+                      Text('Continue', style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: _ink)),
+                      SizedBox(width: 6),
+                      Icon(Icons.arrow_forward_rounded, size: 15, color: _ink),
+                    ]),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
             ]),
           ),
         ),
@@ -176,7 +196,7 @@ class _WelcomeSplashState extends State<WelcomeSplash> with TickerProviderStateM
     return Expanded(
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         TweenAnimationBuilder<double>(
-          duration: const Duration(milliseconds: 1100),
+          duration: const Duration(milliseconds: 1800),
           curve: Curves.easeOutCubic,
           tween: Tween(begin: 0, end: n.toDouble()),
           builder: (_, v, _) => Text(

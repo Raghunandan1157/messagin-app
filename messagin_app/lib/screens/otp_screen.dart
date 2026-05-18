@@ -133,20 +133,22 @@ class _OtpScreenState extends State<OtpScreen> with TickerProviderStateMixin {
                 ? [BoxShadow(color: WAColors.brand.withValues(alpha: 0.10), blurRadius: 12, spreadRadius: 1)]
                 : null,
           ),
+          alignment: Alignment.center,
           child: TextField(
             controller: _ctrls[i],
             focusNode: _nodes[i],
             keyboardType: TextInputType.number,
             textAlign: TextAlign.center,
+            textAlignVertical: TextAlignVertical.center,
             maxLength: 1,
             showCursor: false,
-            style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w600, color: _ink),
+            style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w600, color: _ink, height: 1.0),
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             decoration: const InputDecoration(
               counterText: '',
               border: InputBorder.none,
-              isCollapsed: true,
-              contentPadding: EdgeInsets.zero,
+              isDense: true,
+              contentPadding: EdgeInsets.symmetric(vertical: 18),
             ),
             onChanged: (v) {
               setState(() {});
