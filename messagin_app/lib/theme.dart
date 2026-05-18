@@ -1,74 +1,114 @@
 import 'package:flutter/material.dart';
 
+class WAColors {
+  // WhatsApp brand
+  static const brand = Color(0xFF00A884);
+  static const brandDark = Color(0xFF008069);
+  static const brandHover = Color(0xFF06CF9C);
+
+  // Panels / chrome
+  static const panelLight = Color(0xFFF0F2F5);
+  static const panelDark = Color(0xFF202C33);
+  static const headerLight = Color(0xFFF0F2F5);
+  static const headerDark = Color(0xFF202C33);
+  static const sidebarLight = Color(0xFFFFFFFF);
+  static const sidebarDark = Color(0xFF111B21);
+
+  // Chat area
+  static const chatBgLight = Color(0xFFEFEAE2);
+  static const chatBgDark = Color(0xFF0B141A);
+
+  // Bubbles
+  static const bubbleSentLight = Color(0xFFD9FDD3);
+  static const bubbleSentDark = Color(0xFF005C4B);
+  static const bubbleRecvLight = Color(0xFFFFFFFF);
+  static const bubbleRecvDark = Color(0xFF202C33);
+
+  // Misc
+  static const tickBlue = Color(0xFF53BDEB);
+  static const inkLight = Color(0xFF111B21);
+  static const inkDark = Color(0xFFE9EDEF);
+  static const mutedLight = Color(0xFF667781);
+  static const mutedDark = Color(0xFF8696A0);
+  static const divider = Color(0xFFE9EDEF);
+  static const dateChipLight = Color(0xFFE1F2FB);
+  static const dateChipDark = Color(0xFF182229);
+}
+
+// Back-compat alias for the old name used elsewhere
 class LoopColors {
-  static const brand = Color(0xFF0F6B56);
-  static const brandDark = Color(0xFF14A085);
+  static const brand = WAColors.brand;
+  static const brandDark = WAColors.brandDark;
   static const brandTint = Color(0xFFDAEDE5);
   static const accent = Color(0xFFE8A13A);
-  static const paper = Color(0xFFF3EFE6);
-  static const inkDark = Color(0xFF0A1310);
-  static const bubbleMine = Color(0xFFDCF8C6);
-  static const bubbleOther = Colors.white;
-  static const bubbleMineDark = Color(0xFF075E54);
-  static const bubbleOtherDark = Color(0xFF1F2C34);
-  static const chatBg = Color(0xFFECE5DD);
-  static const chatBgDark = Color(0xFF0B141A);
+  static const paper = WAColors.panelLight;
+  static const inkDark = WAColors.inkLight;
+  static const bubbleMine = WAColors.bubbleSentLight;
+  static const bubbleOther = WAColors.bubbleRecvLight;
+  static const bubbleMineDark = WAColors.bubbleSentDark;
+  static const bubbleOtherDark = WAColors.bubbleRecvDark;
+  static const chatBg = WAColors.chatBgLight;
+  static const chatBgDark = WAColors.chatBgDark;
 }
 
 ThemeData buildLightTheme() {
   final scheme = ColorScheme.fromSeed(
-    seedColor: LoopColors.brand,
-    primary: LoopColors.brand,
-    secondary: LoopColors.brandDark,
+    seedColor: WAColors.brand,
+    primary: WAColors.brand,
+    secondary: WAColors.brandDark,
     brightness: Brightness.light,
   );
   return ThemeData(
     useMaterial3: true,
     colorScheme: scheme,
-    scaffoldBackgroundColor: Colors.white,
+    scaffoldBackgroundColor: WAColors.sidebarLight,
+    fontFamily: 'Inter',
     appBarTheme: const AppBarTheme(
-      backgroundColor: LoopColors.brand,
-      foregroundColor: Colors.white,
+      backgroundColor: WAColors.headerLight,
+      foregroundColor: WAColors.inkLight,
       elevation: 0,
       titleTextStyle: TextStyle(
-        fontSize: 20,
-        fontWeight: FontWeight.w600,
-        color: Colors.white,
+        fontSize: 17,
+        fontWeight: FontWeight.w500,
+        color: WAColors.inkLight,
       ),
+      iconTheme: IconThemeData(color: WAColors.mutedLight),
     ),
     floatingActionButtonTheme: const FloatingActionButtonThemeData(
-      backgroundColor: LoopColors.brandDark,
+      backgroundColor: WAColors.brand,
       foregroundColor: Colors.white,
     ),
-    tabBarTheme: const TabBarThemeData(
-      labelColor: Colors.white,
-      unselectedLabelColor: Colors.white70,
-      indicatorColor: Colors.white,
+    tabBarTheme: TabBarThemeData(
+      labelColor: WAColors.brand,
+      unselectedLabelColor: WAColors.mutedLight,
+      indicatorColor: WAColors.brand,
+      labelStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+      unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
     ),
-    listTileTheme: const ListTileThemeData(
-      iconColor: LoopColors.brand,
-    ),
+    dividerColor: WAColors.divider,
+    listTileTheme: const ListTileThemeData(iconColor: WAColors.mutedLight),
   );
 }
 
 ThemeData buildDarkTheme() {
   final scheme = ColorScheme.fromSeed(
-    seedColor: LoopColors.brand,
-    primary: LoopColors.brandDark,
-    secondary: LoopColors.brand,
+    seedColor: WAColors.brand,
+    primary: WAColors.brand,
+    secondary: WAColors.brandDark,
     brightness: Brightness.dark,
   );
   return ThemeData(
     useMaterial3: true,
     colorScheme: scheme,
-    scaffoldBackgroundColor: const Color(0xFF111B21),
+    scaffoldBackgroundColor: WAColors.sidebarDark,
+    fontFamily: 'Inter',
     appBarTheme: const AppBarTheme(
-      backgroundColor: Color(0xFF1F2C34),
-      foregroundColor: Colors.white,
+      backgroundColor: WAColors.headerDark,
+      foregroundColor: WAColors.inkDark,
       elevation: 0,
     ),
     floatingActionButtonTheme: const FloatingActionButtonThemeData(
-      backgroundColor: LoopColors.brandDark,
+      backgroundColor: WAColors.brand,
       foregroundColor: Colors.white,
     ),
   );

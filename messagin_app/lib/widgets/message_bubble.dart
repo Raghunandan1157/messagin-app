@@ -10,6 +10,7 @@ class MessageBubble extends StatelessWidget {
   final bool showSenderName;
   final String? senderName;
   final bool isDark;
+  final bool showTail;
   final List<Reaction> reactions;
   final void Function(Offset globalPosition)? onLongPress;
   const MessageBubble({
@@ -19,6 +20,7 @@ class MessageBubble extends StatelessWidget {
     this.showSenderName = false,
     this.senderName,
     this.isDark = false,
+    this.showTail = true,
     this.reactions = const [],
     this.onLongPress,
   });
@@ -26,108 +28,183 @@ class MessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bg = isMine
-        ? (isDark ? LoopColors.bubbleMineDark : LoopColors.bubbleMine)
-        : (isDark ? LoopColors.bubbleOtherDark : LoopColors.bubbleOther);
-    final fg = isDark ? Colors.white : Colors.black87;
-    final accentName = _nameColor(senderName ?? '');
+        ? (isDark ? WAColors.bubbleSentDark : WAColors.bubbleSentLight)
+        : (isDark ? WAColors.bubbleRecvDark : WAColors.bubbleRecvLight);
+    final fg = isDark ? Colors.white : WAColors.inkLight;
+    final senderColor = _nameColor(senderName ?? '');
 
     final grouped = <String, int>{};
     for (final r in reactions) {
       grouped.update(r.emoji, (v) => v + 1, ifAbsent: () => 1);
     }
 
-    return Align(
-      alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.78),
+    final radius = BorderRadius.only(
+      topLeft: Radius.circular(isMine ? 7.5 : (showTail ? 0 : 7.5)),
+      topRight: Radius.circular(isMine ? (showTail ? 0 : 7.5) : 7.5),
+      bottomLeft: const Radius.circular(7.5),
+      bottomRight: const Radius.circular(7.5),
+    );
+
+    final bubble = GestureDetector(
+      onLongPressStart: (d) => onLongPress?.call(d.globalPosition),
+      child: Container(
+        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.65),
+        margin: EdgeInsets.only(
+          top: 1,
+          bottom: 1,
+          left: isMine ? 60 : (showTail ? 8 : 16),
+          right: isMine ? (showTail ? 8 : 16) : 60,
+        ),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: radius,
+          boxShadow: [
+            BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 0.5, offset: const Offset(0, 1)),
+          ],
+        ),
+        padding: const EdgeInsets.fromLTRB(9, 6, 9, 6),
         child: Column(
-          crossAxisAlignment: isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            GestureDetector(
-              onLongPressStart: (d) => onLongPress?.call(d.globalPosition),
-              child: Container(
-                margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                padding: const EdgeInsets.fromLTRB(10, 6, 10, 6),
-                decoration: BoxDecoration(
-                  color: bg,
-                  borderRadius: BorderRadius.only(
-                    topLeft: const Radius.circular(12),
-                    topRight: const Radius.circular(12),
-                    bottomLeft: Radius.circular(isMine ? 12 : 2),
-                    bottomRight: Radius.circular(isMine ? 2 : 12),
-                  ),
-                  boxShadow: [
-                    BoxShadow(color: Colors.black.withValues(alpha: 0.06), blurRadius: 1, offset: const Offset(0, 1)),
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    if (showSenderName && !isMine && senderName != null)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 2),
-                        child: Text(senderName!,
-                            style: TextStyle(color: accentName, fontWeight: FontWeight.w600, fontSize: 13)),
-                      ),
-                    Text(message.body ?? '', style: TextStyle(color: fg, fontSize: 15, height: 1.3)),
-                    const SizedBox(height: 2),
-                    Row(mainAxisSize: MainAxisSize.min, mainAxisAlignment: MainAxisAlignment.end, children: [
-                      Text(DateFormat.jm().format(message.createdAt.toLocal()),
-                          style: TextStyle(fontSize: 10.5, color: fg.withValues(alpha: 0.55))),
-                      if (isMine) ...[
-                        const SizedBox(width: 4),
-                        Icon(Icons.done_all, size: 14, color: fg.withValues(alpha: 0.55)),
-                      ],
-                    ]),
-                  ],
-                ),
+            if (showSenderName && !isMine && senderName != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 2),
+                child: Text(senderName!,
+                    style: TextStyle(color: senderColor, fontWeight: FontWeight.w600, fontSize: 13)),
               ),
-            ),
-            if (grouped.isNotEmpty)
-              Transform.translate(
-                offset: const Offset(0, -8),
-                child: Container(
-                  margin: EdgeInsets.only(
-                      left: isMine ? 0 : 14, right: isMine ? 14 : 0),
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF2A3942) : Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(color: Colors.black.withValues(alpha: 0.1), blurRadius: 3),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: grouped.entries
-                        .map((e) => Padding(
-                              padding: const EdgeInsets.symmetric(horizontal: 2),
-                              child: Text(
-                                e.value > 1 ? '${e.key} ${e.value}' : e.key,
-                                style: TextStyle(fontSize: 13, color: fg),
-                              ),
-                            ))
-                        .toList(),
-                  ),
-                ),
-              ),
+            _bubbleContent(fg),
           ],
         ),
       ),
+    );
+
+    Widget rowChild = bubble;
+    if (showTail) {
+      rowChild = Stack(clipBehavior: Clip.none, children: [
+        bubble,
+        Positioned(
+          top: 0,
+          left: isMine ? null : 8,
+          right: isMine ? 8 : null,
+          child: CustomPaint(
+            painter: _TailPainter(color: bg, leftSide: !isMine),
+            size: const Size(10, 12),
+          ),
+        ),
+      ]);
+    }
+
+    return Align(
+      alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
+      child: Column(
+        crossAxisAlignment: isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+        children: [
+          rowChild,
+          if (grouped.isNotEmpty)
+            Transform.translate(
+              offset: const Offset(0, -8),
+              child: Container(
+                margin: EdgeInsets.only(left: isMine ? 0 : 24, right: isMine ? 24 : 0),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withValues(alpha: 0.15), blurRadius: 3),
+                  ],
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: grouped.entries
+                      .map((e) => Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 2),
+                            child: Text(
+                              e.value > 1 ? '${e.key} ${e.value}' : e.key,
+                              style: TextStyle(fontSize: 13, color: fg),
+                            ),
+                          ))
+                      .toList(),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _bubbleContent(Color fg) {
+    final body = message.body ?? '';
+    final timeText = DateFormat.jm().format(message.createdAt.toLocal());
+    final approxBodyWidth = body.length * 8.0;
+    final inline = approxBodyWidth > 60 && approxBodyWidth < 380;
+
+    final time = Row(mainAxisSize: MainAxisSize.min, children: [
+      Text(timeText, style: TextStyle(fontSize: 11, color: WAColors.mutedLight)),
+      if (isMine) ...[
+        const SizedBox(width: 3),
+        const Icon(Icons.done_all, size: 15, color: WAColors.tickBlue),
+      ],
+    ]);
+
+    if (inline) {
+      return Wrap(
+        crossAxisAlignment: WrapCrossAlignment.end,
+        children: [
+          Text(body, style: TextStyle(color: fg, fontSize: 14.5, height: 1.35)),
+          const SizedBox(width: 8),
+          Padding(padding: const EdgeInsets.only(top: 2), child: time),
+        ],
+      );
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(body, style: TextStyle(color: fg, fontSize: 14.5, height: 1.35)),
+        Align(alignment: Alignment.bottomRight, child: time),
+      ],
     );
   }
 
   Color _nameColor(String name) {
     const palette = [
-      Color(0xFF0F6B56),
-      Color(0xFFC64A30),
-      Color(0xFF3A5FD9),
-      Color(0xFF7048BF),
-      Color(0xFFE8A13A),
-      Color(0xFF2DAB6B),
+      Color(0xFF1F7AEC),
+      Color(0xFFE542A3),
+      Color(0xFF8C6BB1),
+      Color(0xFFD8624C),
+      Color(0xFF00897B),
+      Color(0xFF5C6BC0),
+      Color(0xFF7E57C2),
+      Color(0xFFEC407A),
     ];
     final h = name.codeUnits.fold(0, (a, b) => a + b);
     return palette[h % palette.length];
   }
+}
+
+class _TailPainter extends CustomPainter {
+  final Color color;
+  final bool leftSide;
+  _TailPainter({required this.color, required this.leftSide});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final p = Paint()..color = color;
+    final path = Path();
+    if (leftSide) {
+      path.moveTo(size.width, 0);
+      path.lineTo(0, 0);
+      path.quadraticBezierTo(size.width * 0.4, size.height * 0.4, size.width, size.height);
+      path.close();
+    } else {
+      path.moveTo(0, 0);
+      path.lineTo(size.width, 0);
+      path.quadraticBezierTo(size.width * 0.6, size.height * 0.4, 0, size.height);
+      path.close();
+    }
+    canvas.drawPath(path, p);
+  }
+
+  @override
+  bool shouldRepaint(_TailPainter old) => old.color != color || old.leftSide != leftSide;
 }

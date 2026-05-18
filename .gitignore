@@ -85,3 +85,4 @@ Chat_APP.zip
 *.tmp
 *.swp
 *~
+.vercel
