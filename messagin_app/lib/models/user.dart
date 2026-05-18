@@ -5,6 +5,9 @@ class AppUser {
   final String? avatarUrl;
   final String? about;
   final DateTime? lastSeen;
+  final String? empId;
+  final String? role;
+  final String? location;
 
   AppUser({
     required this.id,
@@ -13,6 +16,9 @@ class AppUser {
     this.avatarUrl,
     this.about,
     this.lastSeen,
+    this.empId,
+    this.role,
+    this.location,
   });
 
   factory AppUser.fromRow(Map<String, dynamic> row) => AppUser(
@@ -22,7 +28,18 @@ class AppUser {
         avatarUrl: row['avatar_url'] as String?,
         about: row['about'] as String?,
         lastSeen: row['last_seen'] as DateTime?,
+        empId: row['emp_id'] as String?,
+        role: row['role'] as String?,
+        location: row['location'] as String?,
       );
+
+  String get tagline {
+    final bits = <String>[];
+    if (role != null && role!.isNotEmpty) bits.add(role!);
+    if (location != null && location!.isNotEmpty) bits.add(location!);
+    if (bits.isEmpty) return about ?? phone;
+    return bits.join(' · ');
+  }
 
   String get initials {
     final parts = name.trim().split(RegExp(r'\s+'));
