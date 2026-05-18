@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../theme.dart';
 import 'otp_screen.dart';
 
@@ -51,6 +52,32 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     _typePulse = AnimationController(vsync: this, duration: const Duration(milliseconds: 240));
     _phone.addListener(_onTextChanged);
     _focus.addListener(() => setState(() {}));
+    _restoreLastUsed();
+  }
+
+  Future<void> _restoreLastUsed() async {
+    final prefs = await SharedPreferences.getInstance();
+    final code = prefs.getString('last_country_code');
+    final digits = prefs.getString('last_phone_digits');
+    if (code != null) {
+      final match = _countries.where((c) => c.code == code).toList();
+      if (match.isNotEmpty && mounted) {
+        setState(() => _country = match.first);
+      }
+    }
+    if (digits != null && digits.isNotEmpty && mounted) {
+      _phone.text = digits;
+      _phone.selection = TextSelection.collapsed(offset: digits.length);
+      _lastLen = digits.length;
+      setState(() {});
+    }
+  }
+
+  Future<void> _persistLastUsed() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('last_country_code', _country.code);
+    await prefs.setString('last_country_name', _country.name);
+    await prefs.setString('last_phone_digits', _phone.text.trim());
   }
 
   void _onTextChanged() {
@@ -117,7 +144,11 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
         ),
       ),
     );
-    if (picked != null) setState(() => _country = picked);
+    if (picked != null) {
+      setState(() => _country = picked);
+      // ignore: unawaited_futures
+      _persistLastUsed();
+    }
   }
 
   void _continue() {
@@ -128,6 +159,8 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     }
     final fullPhone = '${_country.code}$digits';
     setState(() => _err = null);
+    // ignore: unawaited_futures
+    _persistLastUsed();
     Navigator.push(
       context,
       PageRouteBuilder(
