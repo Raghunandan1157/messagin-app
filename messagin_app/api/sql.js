@@ -34,6 +34,21 @@ function tablesReferenced(sql) {
   return out;
 }
 
+// Extract CTE alias names from a `WITH name AS (...), name2 AS (...)` clause.
+// These should be allowed in addition to real tables for that one statement.
+// Heuristic: any `<ident> AS (` is a CTE definition. Column aliases use
+// `AS <ident>` (no paren) and table subquery aliases use `) AS <ident>` (paren
+// before), so this match is unambiguous.
+function cteNames(sql) {
+  const out = new Set();
+  const re = /\b([a-zA-Z_][a-zA-Z0-9_]*)\s+as\s+\(/gi;
+  let m;
+  while ((m = re.exec(sql)) !== null) {
+    out.add(m[1].toLowerCase());
+  }
+  return out;
+}
+
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
@@ -71,7 +86,9 @@ export default async function handler(req, res) {
   if (!isSafeStatement(sql)) {
     return res.status(400).json({ error: 'Statement not allowed' });
   }
+  const ctes = cteNames(sql);
   for (const t of tablesReferenced(sql)) {
+    if (ctes.has(t)) continue;
     if (!ALLOWED_TABLES.has(t)) {
       return res.status(403).json({ error: `Table not allowed: ${t}` });
     }
