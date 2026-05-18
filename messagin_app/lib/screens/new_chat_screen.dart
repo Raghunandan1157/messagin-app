@@ -81,15 +81,17 @@ class _NewChatScreenState extends State<NewChatScreen> {
         backgroundColor: WAColors.brandDark,
         foregroundColor: Colors.white,
         elevation: 0,
+        toolbarHeight: 72,
         iconTheme: const IconThemeData(color: Colors.white),
+        titleTextStyle: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w500),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Text(_groupMode ? 'New group' : 'Select contact',
-                style: const TextStyle(fontSize: 17, color: Colors.white, fontWeight: FontWeight.w500)),
+                style: const TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.w500)),
             Text('${_filtered.length} contacts',
-                style: const TextStyle(fontSize: 12, color: Colors.white70)),
+                style: const TextStyle(fontSize: 13, color: Colors.white70, fontWeight: FontWeight.w400)),
           ],
         ),
         actions: [

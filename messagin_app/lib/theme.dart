@@ -86,7 +86,30 @@ ThemeData buildLightTheme() {
       unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
     ),
     dividerColor: WAColors.divider,
-    listTileTheme: const ListTileThemeData(iconColor: WAColors.mutedLight),
+    listTileTheme: const ListTileThemeData(
+      iconColor: WAColors.mutedLight,
+      titleTextStyle: TextStyle(
+        color: WAColors.inkLight,
+        fontSize: 15,
+        fontWeight: FontWeight.w500,
+      ),
+      subtitleTextStyle: TextStyle(
+        color: WAColors.mutedLight,
+        fontSize: 13,
+      ),
+    ),
+    textTheme: const TextTheme(
+      bodyLarge: TextStyle(color: WAColors.inkLight),
+      bodyMedium: TextStyle(color: WAColors.inkLight),
+      bodySmall: TextStyle(color: WAColors.mutedLight),
+      titleLarge: TextStyle(color: WAColors.inkLight, fontWeight: FontWeight.w600),
+      titleMedium: TextStyle(color: WAColors.inkLight, fontWeight: FontWeight.w500),
+      titleSmall: TextStyle(color: WAColors.inkLight),
+      labelLarge: TextStyle(color: WAColors.inkLight),
+    ),
+    inputDecorationTheme: const InputDecorationTheme(
+      hintStyle: TextStyle(color: WAColors.mutedLight),
+    ),
   );
 }
 
