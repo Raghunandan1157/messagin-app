@@ -68,10 +68,12 @@ class _ChatScreenState extends State<ChatScreen> {
     final repo = context.read<AppState>().repo;
     try {
       if (_messages.isNotEmpty) {
-        final since = _messages.last.createdAt;
+        final since = _messages.last.createdAt.subtract(const Duration(seconds: 1));
         final fresh = await repo.messagesSince(widget.chat.id, since);
-        if (fresh.isNotEmpty && mounted) {
-          setState(() => _messages.addAll(fresh));
+        final seen = _messages.map((m) => m.id).toSet();
+        final novel = fresh.where((m) => !seen.contains(m.id)).toList();
+        if (novel.isNotEmpty && mounted) {
+          setState(() => _messages.addAll(novel));
           _scrollToBottom();
         }
       }
