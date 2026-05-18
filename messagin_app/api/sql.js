@@ -16,12 +16,20 @@ function isSafeStatement(sql) {
   return verbs.some((v) => lower.startsWith(v));
 }
 
+const SQL_KEYWORDS = new Set([
+  'set', 'only', 'lateral', 'distinct', 'all', 'where', 'as', 'when',
+  'not', 'exists', 'select', 'with', 'on', 'cascade', 'restrict',
+  'no', 'action', 'default', 'null', 'values', 'returning', 'using',
+]);
+
 function tablesReferenced(sql) {
-  const re = /(?:from|join|into|update|table)\s+([a-zA-Z_][a-zA-Z0-9_]*)/gi;
+  const re = /(?:\bfrom|\bjoin|\binto|\bupdate|\btable)\s+([a-zA-Z_][a-zA-Z0-9_]*)/gi;
   const out = new Set();
   let m;
   while ((m = re.exec(sql)) !== null) {
-    out.add(m[1].toLowerCase());
+    const name = m[1].toLowerCase();
+    if (SQL_KEYWORDS.has(name)) continue;
+    out.add(name);
   }
   return out;
 }
