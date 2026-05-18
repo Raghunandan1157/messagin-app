@@ -1,0 +1,522 @@
+/* Wireframe primitives — sketchy/hand-drawn vibe, B&W + accent */
+
+:root {
+  --ink: #1a1815;
+  --ink-2: #4a463f;
+  --ink-3: #8a857c;
+  --paper: #faf7f1;
+  --paper-2: #f3eee4;
+  --accent: #e85a2c;        /* warm orange */
+  --line: #1a1815;
+  --line-soft: rgba(26,24,21,0.45);
+  --line-faint: rgba(26,24,21,0.2);
+  --hand: "Caveat", "Patrick Hand", cursive;
+  --body: "Patrick Hand", "Caveat", cursive;
+  --mono: "JetBrains Mono", ui-monospace, monospace;
+}
+
+* { box-sizing: border-box; }
+
+/* ---------- Phone shell ---------- */
+.wf-phone {
+  width: 280px;
+  height: 580px;
+  background: var(--paper);
+  border: 1.8px solid var(--ink);
+  border-radius: 28px;
+  position: relative;
+  overflow: hidden;
+  font-family: var(--body);
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+  /* soft hand-drawn shadow */
+  box-shadow: 2px 3px 0 rgba(26,24,21,0.08);
+}
+.wf-phone::before {
+  /* notch */
+  content: "";
+  position: absolute;
+  top: 8px; left: 50%;
+  transform: translateX(-50%);
+  width: 80px; height: 18px;
+  background: var(--ink);
+  border-radius: 12px;
+  z-index: 5;
+}
+.wf-status {
+  height: 30px;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 18px 0;
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--ink-2);
+}
+.wf-status .battery {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.wf-status .battery::after {
+  content: "";
+  width: 18px; height: 9px;
+  border: 1.2px solid var(--ink-2);
+  border-radius: 2px;
+  background: linear-gradient(to right, var(--ink-2) 70%, transparent 70%);
+}
+
+/* ---------- App nav / topbar ---------- */
+.wf-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  border-bottom: 1.5px dashed var(--line-faint);
+  flex-shrink: 0;
+}
+.wf-topbar h1 {
+  margin: 0;
+  font-family: var(--hand);
+  font-weight: 700;
+  font-size: 22px;
+  letter-spacing: 0.5px;
+}
+.wf-topbar .actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* ---------- Generic UI bits ---------- */
+.wf-avatar {
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  border: 1.5px solid var(--ink);
+  background: var(--paper-2);
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--hand);
+  font-size: 16px;
+  color: var(--ink-2);
+  position: relative;
+}
+.wf-avatar.sm { width: 26px; height: 26px; font-size: 12px; }
+.wf-avatar.lg { width: 70px; height: 70px; font-size: 28px; }
+.wf-avatar.xl { width: 110px; height: 110px; font-size: 38px; }
+.wf-avatar.online::after {
+  content: "";
+  position: absolute;
+  bottom: 0; right: 0;
+  width: 10px; height: 10px;
+  background: var(--accent);
+  border: 1.5px solid var(--paper);
+  border-radius: 50%;
+}
+
+.wf-icon {
+  width: 22px; height: 22px;
+  border: 1.4px solid var(--ink);
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--hand);
+  font-size: 13px;
+  background: var(--paper);
+  cursor: default;
+}
+.wf-icon.circle { border-radius: 50%; }
+.wf-icon.solid { background: var(--ink); color: var(--paper); }
+.wf-icon.accent { background: var(--accent); border-color: var(--accent); color: var(--paper); }
+
+.wf-search {
+  margin: 8px 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: 1.4px solid var(--line);
+  border-radius: 20px;
+  padding: 5px 12px;
+  font-size: 12px;
+  color: var(--ink-3);
+  background: var(--paper);
+}
+.wf-search.dashed { border-style: dashed; }
+
+.wf-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 0 14px 6px;
+  flex-shrink: 0;
+}
+.wf-tabs .tab {
+  padding: 3px 10px;
+  font-family: var(--hand);
+  font-size: 13px;
+  border: 1.3px solid var(--line);
+  border-radius: 14px;
+  background: var(--paper);
+}
+.wf-tabs .tab.active {
+  background: var(--ink);
+  color: var(--paper);
+}
+.wf-tabs .tab.accent { background: var(--accent); border-color: var(--accent); color: var(--paper); }
+
+/* ---------- Chat-list rows ---------- */
+.wf-list {
+  flex: 1 1 auto;
+  overflow: hidden;
+  padding: 6px 0;
+}
+.wf-row {
+  display: flex;
+  gap: 10px;
+  padding: 8px 14px;
+  align-items: center;
+  border-bottom: 1px dotted var(--line-faint);
+}
+.wf-row .body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.wf-row .name {
+  font-family: var(--hand);
+  font-size: 16px;
+  font-weight: 700;
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+}
+.wf-row .name .time {
+  font-size: 10px;
+  font-family: var(--mono);
+  color: var(--ink-3);
+  font-weight: 400;
+}
+.wf-row .preview {
+  font-size: 11px;
+  color: var(--ink-2);
+  display: flex;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 1px;
+}
+.wf-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 10px;
+  font-family: var(--mono);
+  font-size: 10px;
+  background: var(--accent);
+  color: var(--paper);
+}
+
+/* ---------- Bubbles ---------- */
+.wf-msgs {
+  flex: 1 1 auto;
+  overflow: hidden;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0 23px,
+      rgba(26,24,21,0.04) 23px 24px
+    );
+}
+.wf-bubble {
+  max-width: 80%;
+  padding: 6px 10px;
+  border: 1.4px solid var(--ink);
+  border-radius: 14px;
+  font-size: 12px;
+  line-height: 1.3;
+  background: var(--paper);
+  position: relative;
+  font-family: var(--body);
+}
+.wf-bubble.me {
+  align-self: flex-end;
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--paper);
+  border-bottom-right-radius: 4px;
+}
+.wf-bubble.them {
+  align-self: flex-start;
+  border-bottom-left-radius: 4px;
+}
+.wf-bubble.them.filled { background: var(--paper-2); }
+.wf-bubble .meta {
+  font-family: var(--mono);
+  font-size: 8.5px;
+  opacity: 0.55;
+  margin-top: 2px;
+  text-align: right;
+}
+.wf-bubble.me .meta { color: rgba(255,255,255,0.85); }
+
+.wf-daysep {
+  align-self: center;
+  font-family: var(--hand);
+  font-size: 11px;
+  color: var(--ink-3);
+  padding: 2px 10px;
+  border: 1.2px dashed var(--line-faint);
+  border-radius: 10px;
+  margin: 6px 0;
+  background: var(--paper);
+}
+
+/* ---------- Composer ---------- */
+.wf-composer {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border-top: 1.5px dashed var(--line-faint);
+  background: var(--paper);
+  flex-shrink: 0;
+}
+.wf-composer .input {
+  flex: 1 1 auto;
+  border: 1.4px solid var(--line);
+  border-radius: 16px;
+  padding: 5px 10px;
+  font-size: 11px;
+  color: var(--ink-3);
+  font-family: var(--body);
+}
+
+/* ---------- Bottom nav ---------- */
+.wf-bottomnav {
+  display: flex;
+  justify-content: space-around;
+  padding: 6px 0 10px;
+  border-top: 1.5px solid var(--ink);
+  flex-shrink: 0;
+  background: var(--paper);
+}
+.wf-bottomnav .item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  font-family: var(--hand);
+  font-size: 10px;
+  color: var(--ink-3);
+}
+.wf-bottomnav .item.active { color: var(--accent); }
+.wf-bottomnav .item.active .wf-icon { background: var(--accent); border-color: var(--accent); color: var(--paper); }
+
+/* ---------- Placeholder boxes ---------- */
+.wf-box {
+  border: 1.4px solid var(--line);
+  border-radius: 10px;
+  background:
+    repeating-linear-gradient(
+      45deg,
+      transparent 0 6px,
+      rgba(26,24,21,0.05) 6px 7px
+    );
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--ink-3);
+}
+.wf-box.dashed { border-style: dashed; }
+
+/* ---------- Annotations ---------- */
+.wf-note {
+  position: absolute;
+  font-family: var(--hand);
+  font-size: 13px;
+  color: var(--accent);
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 6;
+}
+.wf-note .arrow {
+  display: inline-block;
+  font-size: 16px;
+  vertical-align: middle;
+}
+
+/* hand-drawn wobble line under headings */
+.wf-underline {
+  display: inline-block;
+  position: relative;
+}
+.wf-underline::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: -3px;
+  height: 4px;
+  background: var(--accent);
+  border-radius: 50%;
+  opacity: 0.7;
+  transform: scaleY(0.4) rotate(-0.5deg);
+}
+
+/* ---------- Strand layout (novel chat list) ---------- */
+.wf-strand {
+  position: relative;
+  padding: 8px 14px 8px 24px;
+}
+.wf-strand::before {
+  content: "";
+  position: absolute;
+  left: 14px; top: 0; bottom: 0;
+  width: 1.5px;
+  background: var(--line-faint);
+  background-image: linear-gradient(to bottom, var(--line-soft) 50%, transparent 50%);
+  background-size: 1.5px 6px;
+}
+.wf-strand-node {
+  position: absolute;
+  left: 10px;
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  border: 1.5px solid var(--ink);
+  background: var(--paper);
+}
+.wf-strand-node.unread { background: var(--accent); border-color: var(--accent); }
+
+/* ---------- Call screen ---------- */
+.wf-call {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 30px 18px;
+  background: var(--paper-2);
+  text-align: center;
+}
+.wf-call .caller-name {
+  font-family: var(--hand);
+  font-size: 26px;
+  margin-top: 14px;
+}
+.wf-call .caller-status {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-3);
+  margin-top: 4px;
+  letter-spacing: 1px;
+}
+.wf-call .call-actions {
+  display: flex;
+  gap: 14px;
+}
+.wf-call .call-btn {
+  width: 48px; height: 48px;
+  border-radius: 50%;
+  border: 1.5px solid var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--hand);
+  font-size: 12px;
+  background: var(--paper);
+}
+.wf-call .call-btn.end { background: var(--accent); border-color: var(--accent); color: var(--paper); }
+
+/* ---------- Profile ---------- */
+.wf-profile-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 18px 14px 12px;
+  border-bottom: 1.5px dashed var(--line-faint);
+}
+.wf-profile-rows {
+  display: flex;
+  flex-direction: column;
+}
+.wf-profile-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px dotted var(--line-faint);
+  font-size: 13px;
+}
+.wf-profile-row .label { flex: 1 1 auto; }
+.wf-profile-row .val { font-family: var(--mono); font-size: 10px; color: var(--ink-3); }
+
+/* ---------- Reactions ---------- */
+.wf-reactions {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px 6px;
+  margin-top: -4px;
+  background: var(--paper);
+  border: 1.2px solid var(--line);
+  border-radius: 12px;
+  font-family: var(--hand);
+  font-size: 11px;
+  align-self: flex-start;
+  position: relative;
+  z-index: 1;
+}
+.wf-reactions.right { align-self: flex-end; }
+
+/* ---------- Sender label (group chat) ---------- */
+.wf-sender {
+  font-family: var(--hand);
+  font-size: 11px;
+  font-weight: 700;
+  margin-bottom: -2px;
+  padding-left: 10px;
+}
+.wf-sender.c1 { color: #c44a30; }
+.wf-sender.c2 { color: #2f6f8f; }
+.wf-sender.c3 { color: #5a7a2c; }
+.wf-sender.c4 { color: #8a4caf; }
+
+/* ---------- Voice msg ---------- */
+.wf-voice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 140px;
+}
+.wf-voice .wave {
+  flex: 1 1 auto;
+  height: 14px;
+  background-image: repeating-linear-gradient(
+    to right,
+    currentColor 0 1.5px,
+    transparent 1.5px 4px
+  );
+  opacity: 0.7;
+  mask: linear-gradient(to right, black, black);
+  -webkit-mask-image: radial-gradient(ellipse at center, black 70%, transparent 100%);
+}
+.wf-voice .dur {
+  font-family: var(--mono);
+  font-size: 9px;
+  opacity: 0.7;
+}
+
+/* ---------- Helpers ---------- */
+.wf-spacer { flex: 1 1 auto; }
+.wf-hand { font-family: var(--hand); }
+.wf-mono { font-family: var(--mono); }
+.wf-small { font-size: 10px; }
+.wf-muted { color: var(--ink-3); }
+.wf-center { display: flex; justify-content: center; align-items: center; }

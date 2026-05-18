@@ -1,0 +1,87 @@
+# Secrets
+**/.env
+**/.env.local
+**/.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.iml
+*.iws
+*.ipr
+
+# Flutter / Dart
+**/.dart_tool/
+**/.flutter-plugins
+**/.flutter-plugins-dependencies
+**/.packages
+**/.pub-cache/
+**/.pub/
+**/build/
+**/pubspec.lock.bak
+
+# Android
+**/android/.gradle/
+**/android/local.properties
+**/android/captures/
+**/android/gradlew
+**/android/gradlew.bat
+**/android/key.properties
+**/android/**/GeneratedPluginRegistrant.java
+**/android/app/release/
+**/android/.cxx/
+
+# iOS / macOS
+**/ios/Pods/
+**/ios/.symlinks/
+**/ios/Flutter/Generated.xcconfig
+**/ios/Flutter/ephemeral/
+**/ios/Flutter/flutter_export_environment.sh
+**/macos/Pods/
+**/macos/Flutter/ephemeral/
+**/macos/Flutter/GeneratedPluginRegistrant.swift
+**/ios/Runner/GeneratedPluginRegistrant.*
+**/DerivedData/
+**/xcuserdata/
+**/*.mode1v3
+**/*.mode2v3
+**/*.perspectivev3
+**/*.pbxuser
+
+# Linux
+**/linux/flutter/ephemeral/
+
+# Windows
+**/windows/flutter/ephemeral/
+
+# Web
+**/web/build/
+
+# Node
+**/node_modules/
+**/.npm/
+**/npm-debug.log*
+**/yarn-debug.log*
+**/yarn-error.log*
+
+# Vercel
+**/.vercel/
+
+# Local design scratchpad
+**/.remember/
+**/.design-canvas.state.json
+
+# Local Loop bundle reference (keep design_ref code, drop original zip)
+Chat_APP.zip
+
+# Logs
+*.log
+
+# Temp
+*.tmp
+*.swp
+*~
