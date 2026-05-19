@@ -44,6 +44,15 @@ Future<String?> showReactionPicker(BuildContext context, Offset globalPosition) 
                     child: Icon(Icons.add_circle_outline, size: 28, color: Colors.grey),
                   ),
                 ),
+                Container(width: 1, height: 28, color: Colors.black12, margin: const EdgeInsets.symmetric(horizontal: 4)),
+                InkWell(
+                  onTap: () => Navigator.pop(context, ':reply'),
+                  borderRadius: BorderRadius.circular(20),
+                  child: const Padding(
+                    padding: EdgeInsets.all(6),
+                    child: Icon(Icons.reply, size: 26, color: Colors.grey),
+                  ),
+                ),
               ],
             ),
           ),

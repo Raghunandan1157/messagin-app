@@ -500,12 +500,43 @@ class _ChatRow extends StatelessWidget {
                                   : 'Tap to chat'),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
+                          style: TextStyle(
                             fontSize: 14,
-                            color: WAColors.mutedLight,
+                            color: chat.unreadCount > 0
+                                ? WAColors.inkLight
+                                : WAColors.mutedLight,
+                            fontWeight: chat.unreadCount > 0
+                                ? FontWeight.w600
+                                : FontWeight.normal,
                           ),
                         ),
                       ),
+                      if (chat.unreadCount > 0) ...[
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 7,
+                            vertical: 2,
+                          ),
+                          constraints: const BoxConstraints(minWidth: 22),
+                          decoration: const BoxDecoration(
+                            color: WAColors.brand,
+                            shape: BoxShape.circle,
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            chat.unreadCount > 99
+                                ? '99+'
+                                : '${chat.unreadCount}',
+                            textAlign: TextAlign.center,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ],

@@ -48,6 +48,8 @@ class _ChatPaneState extends State<ChatPane> {
   Timer? _presencePoll;
   AppUser? _livePeer;
   bool _showJumpToBottom = false;
+  Message? _replyingTo;
+  Set<String> _peerReadIds = {};
 
   @override
   void initState() {
@@ -57,13 +59,45 @@ class _ChatPaneState extends State<ChatPane> {
       if (has != _hasText) setState(() => _hasText = has);
     });
     _load();
-    _poll = Timer.periodic(const Duration(seconds: 3), (_) => _pollNew());
+    _poll = Timer.periodic(const Duration(seconds: 3), (_) {
+      _pollNew();
+      _refreshPeerReads();
+    });
     _scroll.addListener(_onScroll);
+    _markChatRead();
+    _refreshPeerReads();
     _refreshPeerPresence();
     _presencePoll = Timer.periodic(
       const Duration(seconds: 15),
       (_) => _refreshPeerPresence(),
     );
+  }
+
+  Future<void> _markChatRead() async {
+    final state = context.read<AppState>();
+    final me = state.me;
+    if (me == null) return;
+    try {
+      await state.repo.markChatRead(widget.chat.id, me.id);
+    } catch (e) {
+      debugPrint('markChatRead failed: $e');
+    }
+  }
+
+  Future<void> _refreshPeerReads() async {
+    final state = context.read<AppState>();
+    final me = state.me;
+    if (me == null) return;
+    try {
+      final ids = await state.repo.peerReadMessageIds(widget.chat.id, me.id);
+      if (!mounted) return;
+      if (ids.length != _peerReadIds.length ||
+          !ids.containsAll(_peerReadIds)) {
+        setState(() => _peerReadIds = ids);
+      }
+    } catch (e) {
+      debugPrint('peerReadMessageIds failed: $e');
+    }
   }
 
   void _onScroll() {
@@ -196,6 +230,7 @@ class _ChatPaneState extends State<ChatPane> {
             }
           }
           _scrollToBottom();
+          _markChatRead();
         }
       } else {
         await _load();
@@ -227,6 +262,7 @@ class _ChatPaneState extends State<ChatPane> {
     final state = context.read<AppState>();
     final me = state.me!;
 
+    final replyId = _replyingTo?.id;
     final tempId = 'local-${_uuid.v4()}';
     final temp = Message(
       id: tempId,
@@ -234,6 +270,7 @@ class _ChatPaneState extends State<ChatPane> {
       senderId: me.id,
       kind: 'text',
       body: text,
+      replyTo: replyId,
       createdAt: DateTime.now(),
     );
     _input.clear();
@@ -241,6 +278,7 @@ class _ChatPaneState extends State<ChatPane> {
       _messages.add(temp);
       _hasText = false;
       _sending = true;
+      _replyingTo = null;
     });
     final visibleCount = _messages.where((m) => m.kind == 'text').length;
     _listKey.currentState?.insertItem(
@@ -250,7 +288,12 @@ class _ChatPaneState extends State<ChatPane> {
     _scrollToBottom();
 
     try {
-      final m = await state.repo.sendMessage(widget.chat.id, me.id, text);
+      final m = await state.repo.sendMessage(
+        widget.chat.id,
+        me.id,
+        text,
+        replyTo: replyId,
+      );
       if (!mounted) return;
       setState(() {
         final i = _messages.indexWhere((x) => x.id == tempId);
@@ -391,6 +434,11 @@ class _ChatPaneState extends State<ChatPane> {
   Future<void> _onLongPress(Message m, Offset pos) async {
     final picked = await showReactionPicker(context, pos);
     if (picked == null) return;
+    if (picked == ':reply') {
+      if (!mounted) return;
+      setState(() => _replyingTo = m);
+      return;
+    }
     String? emoji = picked;
     if (emoji == '+') {
       if (!mounted) return;
@@ -759,17 +807,33 @@ class _ChatPaneState extends State<ChatPane> {
                                       ),
                                     );
                                   },
-                                  child: MessageBubble(
-                                    key: ValueKey(m.id),
-                                    message: m,
-                                    isMine: isMine,
-                                    showSenderName: showName,
-                                    senderName: memberById[m.senderId]?.name,
-                                    reactions: rs,
-                                    showTail: showTail,
-                                    onLongPress: (pos) => _onLongPress(m, pos),
-                                    onDoubleTap: () => _onDoubleTap(m),
-                                  ),
+                                  child: Builder(builder: (_) {
+                                    Message? quoted;
+                                    if (m.replyTo != null) {
+                                      for (final x in _messages) {
+                                        if (x.id == m.replyTo) {
+                                          quoted = x;
+                                          break;
+                                        }
+                                      }
+                                    }
+                                    return MessageBubble(
+                                      key: ValueKey(m.id),
+                                      message: m,
+                                      isMine: isMine,
+                                      showSenderName: showName,
+                                      senderName: memberById[m.senderId]?.name,
+                                      reactions: rs,
+                                      showTail: showTail,
+                                      onLongPress: (pos) => _onLongPress(m, pos),
+                                      onDoubleTap: () => _onDoubleTap(m),
+                                      repliedMessage: quoted,
+                                      repliedSenderName: quoted == null
+                                          ? null
+                                          : memberById[quoted.senderId]?.name,
+                                      peerRead: isMine && _peerReadIds.contains(m.id),
+                                    );
+                                  }),
                                 ),
                               ],
                             ),
@@ -812,6 +876,56 @@ class _ChatPaneState extends State<ChatPane> {
             ),
           ]),
         ),
+        if (_replyingTo != null)
+          Container(
+            color: WAColors.panelLight,
+            padding: const EdgeInsets.fromLTRB(12, 6, 12, 0),
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(10, 8, 6, 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE9F4EB),
+                borderRadius: BorderRadius.circular(6),
+                border: const Border(
+                  left: BorderSide(color: WAColors.brand, width: 3),
+                ),
+              ),
+              child: Row(children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        memberById[_replyingTo!.senderId]?.name ?? 'Reply',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: WAColors.brand,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        _replyingTo!.body ?? '',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: WAColors.mutedLight,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton(
+                  iconSize: 18,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(),
+                  onPressed: () => setState(() => _replyingTo = null),
+                  icon: const Icon(Icons.close, color: WAColors.mutedLight),
+                ),
+              ]),
+            ),
+          ),
         Container(
           color: WAColors.panelLight,
           padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),

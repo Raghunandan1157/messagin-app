@@ -7,6 +7,7 @@ const ALLOWED_TABLES = new Set([
   'messages',
   'message_reads',
   'message_reactions',
+  'attachments',
 ]);
 
 function isSafeStatement(sql) {

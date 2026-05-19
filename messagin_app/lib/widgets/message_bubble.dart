@@ -15,6 +15,9 @@ class MessageBubble extends StatelessWidget {
   final void Function(Offset globalPosition)? onLongPress;
   final VoidCallback? onDoubleTap;
   final Animation<double>? animation;
+  final Message? repliedMessage;
+  final String? repliedSenderName;
+  final bool peerRead;
 
   const MessageBubble({
     super.key,
@@ -28,6 +31,9 @@ class MessageBubble extends StatelessWidget {
     this.onLongPress,
     this.onDoubleTap,
     this.animation,
+    this.repliedMessage,
+    this.repliedSenderName,
+    this.peerRead = false,
   });
 
   @override
@@ -80,6 +86,44 @@ class MessageBubble extends StatelessWidget {
                 padding: const EdgeInsets.only(bottom: 2),
                 child: Text(senderName!,
                     style: TextStyle(color: senderColor, fontWeight: FontWeight.w600, fontSize: 13)),
+              ),
+            if (repliedMessage != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Container(
+                  padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.05),
+                    borderRadius: BorderRadius.circular(6),
+                    border: const Border(
+                      left: BorderSide(color: WAColors.brand, width: 3),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        repliedSenderName ?? 'Reply',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: WAColors.brand,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        repliedMessage!.body ?? '',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: fg.withValues(alpha: 0.7),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ),
             _bubbleContent(fg),
           ],
@@ -174,7 +218,11 @@ class MessageBubble extends StatelessWidget {
       Text(timeText, style: TextStyle(fontSize: 11, color: WAColors.mutedLight)),
       if (isMine) ...[
         const SizedBox(width: 3),
-        const Icon(Icons.done_all, size: 15, color: WAColors.tickBlue),
+        Icon(
+          Icons.done_all,
+          size: 15,
+          color: peerRead ? WAColors.tickBlue : WAColors.mutedLight,
+        ),
       ],
     ]);
 

@@ -57,6 +57,18 @@ class Repository {
         JOIN chat_members cm ON cm.chat_id = c.id
         WHERE cm.user_id = @uid
       ),
+      unread AS (
+        SELECT m.chat_id, COUNT(*)::int AS n
+        FROM messages m
+        WHERE m.chat_id IN (SELECT id FROM my_chats)
+          AND m.kind = 'text'
+          AND m.sender_id <> @uid
+          AND NOT EXISTS (
+            SELECT 1 FROM message_reads r
+            WHERE r.message_id = m.id AND r.user_id = @uid
+          )
+        GROUP BY m.chat_id
+      ),
       last_msg AS (
         -- Restrict to user-visible text messages so call_invite / call_reject
         -- control envelopes don't show up as 'last message' in the chat list.
@@ -79,10 +91,12 @@ class Repository {
         WHERE cm.chat_id IN (SELECT id FROM my_chats)
         GROUP BY cm.chat_id
       )
-      SELECT c.*, lm.body AS last_body, lm.last_at, lm.sender_id AS last_sender, m.member_json
+      SELECT c.*, lm.body AS last_body, lm.last_at, lm.sender_id AS last_sender,
+             m.member_json, COALESCE(u.n, 0) AS unread_n
       FROM my_chats c
       LEFT JOIN last_msg lm ON lm.chat_id = c.id
       LEFT JOIN members m ON m.chat_id = c.id
+      LEFT JOIN unread u ON u.chat_id = c.id
       ORDER BY lm.last_at DESC NULLS LAST, c.created_at DESC
     ''', params: {'uid': userId});
 
@@ -110,6 +124,7 @@ class Repository {
         lastMessageBody: row['last_body'] as String?,
         lastMessageAt: row['last_at'] == null ? null : _parseDate(row['last_at']),
         lastMessageSenderId: row['last_sender']?.toString(),
+        unreadCount: (row['unread_n'] as num?)?.toInt() ?? 0,
       ));
     }
     return chats;
@@ -194,13 +209,46 @@ class Repository {
     return rows.map(Message.fromRow).toList();
   }
 
-  Future<Message> sendMessage(String chatId, String senderId, String body) async {
+  Future<Message> sendMessage(
+    String chatId,
+    String senderId,
+    String body, {
+    String? replyTo,
+  }) async {
+    if (replyTo != null) {
+      final rows = await db.query(
+        '''INSERT INTO messages (chat_id, sender_id, body, kind, reply_to)
+           VALUES (@c, @s, @b, 'text', @r) RETURNING *''',
+        params: {'c': chatId, 's': senderId, 'b': body, 'r': replyTo},
+      );
+      return Message.fromRow(rows.first);
+    }
     final rows = await db.query(
       '''INSERT INTO messages (chat_id, sender_id, body, kind)
          VALUES (@c, @s, @b, 'text') RETURNING *''',
       params: {'c': chatId, 's': senderId, 'b': body},
     );
     return Message.fromRow(rows.first);
+  }
+
+  Future<Set<String>> peerReadMessageIds(String chatId, String senderId) async {
+    final rows = await db.query(
+      '''SELECT DISTINCT m.id FROM messages m
+         JOIN message_reads r ON r.message_id = m.id
+         WHERE m.chat_id = @c AND m.sender_id = @s AND r.user_id <> @s''',
+      params: {'c': chatId, 's': senderId},
+    );
+    return rows.map((r) => r['id'].toString()).toSet();
+  }
+
+  Future<void> markChatRead(String chatId, String userId) async {
+    await db.query(
+      '''INSERT INTO message_reads (message_id, user_id)
+         SELECT m.id, @u FROM messages m
+         WHERE m.chat_id = @c AND m.sender_id <> @u AND m.kind = 'text'
+         ON CONFLICT (message_id, user_id) DO NOTHING''',
+      params: {'c': chatId, 'u': userId},
+    );
   }
 
   /// Insert a non-text control message (e.g. `call_invite`, `call_reject`).
