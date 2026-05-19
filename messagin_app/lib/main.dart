@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
 import 'calls/call_controller.dart';
+import 'calls/call_invite_watcher.dart';
 import 'calls/signaling.dart';
 import 'models/user.dart';
 import 'screens/home_shell.dart';
@@ -31,7 +32,7 @@ class MessaginApp extends StatelessWidget {
           create: (_) => _CallStack(),
           update: (_, state, prev) {
             prev ??= _CallStack();
-            prev.syncToUser(state.me?.id);
+            prev.syncToUser(state.me?.id, state);
             return prev;
           },
         ),
@@ -59,9 +60,10 @@ class _CallStack extends ChangeNotifier {
   String? _userId;
   SignalingClient? signaling;
   CallController? controller;
+  CallInviteWatcher? inviteWatcher;
   bool _routedRinging = false;
 
-  void syncToUser(String? userId) {
+  void syncToUser(String? userId, AppState state) {
     if (userId == _userId) return;
     _userId = userId;
     _tearDown();
@@ -75,6 +77,14 @@ class _CallStack extends ChangeNotifier {
     // Fire-and-forget; reconnect logic lives inside the client.
     // ignore: unawaited_futures
     signaling!.connect();
+    // Start polling Neon for call_invite/call_reject control messages — this
+    // is what surfaces incoming-call rings to the callee since the WebSocket
+    // signaling server doesn't carry invites itself.
+    inviteWatcher = CallInviteWatcher(
+      repo: state.repo,
+      controller: controller!,
+      selfUserId: userId,
+    )..start();
     notifyListeners();
   }
 
@@ -118,6 +128,8 @@ class _CallStack extends ChangeNotifier {
   }
 
   void _tearDown() {
+    inviteWatcher?.stop();
+    inviteWatcher = null;
     controller?.removeListener(_onControllerChange);
     controller?.dispose();
     controller = null;

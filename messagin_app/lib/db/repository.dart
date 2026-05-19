@@ -42,9 +42,12 @@ class Repository {
         WHERE cm.user_id = @uid
       ),
       last_msg AS (
+        -- Restrict to user-visible text messages so call_invite / call_reject
+        -- control envelopes don't show up as 'last message' in the chat list.
         SELECT DISTINCT ON (m.chat_id) m.chat_id, m.body, m.created_at AS last_at, m.sender_id
         FROM messages m
         WHERE m.chat_id IN (SELECT id FROM my_chats)
+          AND m.kind = 'text'
         ORDER BY m.chat_id, m.created_at DESC
       ),
       members AS (
@@ -181,6 +184,43 @@ class Repository {
       params: {'c': chatId, 's': senderId, 'b': body},
     );
     return Message.fromRow(rows.first);
+  }
+
+  /// Insert a non-text control message (e.g. `call_invite`, `call_reject`).
+  /// `body` is a JSON-encoded string the recipient parses to drive UX.
+  Future<Message> sendControlMessage(
+    String chatId,
+    String senderId,
+    String kind,
+    String bodyJson,
+  ) async {
+    final rows = await db.query(
+      '''INSERT INTO messages (chat_id, sender_id, body, kind)
+         VALUES (@c, @s, @b, @k) RETURNING *''',
+      params: {'c': chatId, 's': senderId, 'b': bodyJson, 'k': kind},
+    );
+    return Message.fromRow(rows.first);
+  }
+
+  /// Fetch recent `call_invite` / `call_reject` messages addressed at the
+  /// user across all chats they belong to. Used by CallInviteWatcher.
+  Future<List<Message>> recentCallControlMessages(
+    String userId,
+    DateTime since, {
+    int limit = 50,
+  }) async {
+    final rows = await db.query('''
+      SELECT m.*
+      FROM messages m
+      JOIN chat_members cm ON cm.chat_id = m.chat_id
+      WHERE cm.user_id = @u
+        AND m.sender_id != @u
+        AND m.kind IN ('call_invite', 'call_reject')
+        AND m.created_at > @t
+      ORDER BY m.created_at ASC
+      LIMIT @l
+    ''', params: {'u': userId, 't': since, 'l': limit});
+    return rows.map(Message.fromRow).toList();
   }
 
   Future<List<Message>> messagesSince(String chatId, DateTime since) async {

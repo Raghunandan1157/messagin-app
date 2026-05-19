@@ -246,6 +246,24 @@ class CallController extends ChangeNotifier {
     signaling.sendOffer(peerPeerId!, {'sdp': offer.sdp, 'type': offer.type});
   }
 
+  /// Mark this controller as having an incoming invite from [callerUserId]
+  /// for chat [chatId]. Driven by the app-level CallInviteWatcher (which polls
+  /// Neon for `call_invite` control messages). After this, the navigator
+  /// observer in main.dart pushes IncomingCallScreen.
+  void setIncoming({
+    required String chatId,
+    required String callerUserId,
+    required bool video,
+  }) {
+    // Don't preempt an active call with an unrelated ring.
+    if (state != CallState.idle && state != CallState.ended) return;
+    this.chatId = chatId;
+    peerUserId = callerUserId;
+    isVideo = video;
+    state = CallState.ringing;
+    notifyListeners();
+  }
+
   /// Start (or accept) a 1:1 call by joining the room `chatId`. The first
   /// joiner waits; the second joiner offers (per NAVA contract).
   Future<void> start({

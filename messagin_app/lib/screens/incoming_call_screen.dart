@@ -1,8 +1,11 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../calls/call_controller.dart';
 import '../models/user.dart';
+import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/avatar.dart';
 import 'call_screen.dart';
@@ -87,7 +90,7 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
                     icon: Icons.call_end,
                     color: Colors.red,
                     label: 'Decline',
-                    onTap: () => ctrl.reject(),
+                    onTap: () => _decline(context, ctrl),
                   ),
                   _circleBtn(
                     icon: ctrl.isVideo ? Icons.videocam : Icons.call,
@@ -102,6 +105,28 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _decline(BuildContext context, CallController ctrl) async {
+    // Write a call_reject control message so the caller's CallInviteWatcher
+    // tears down on their side as well. Fire-and-forget; even if Neon write
+    // fails the local UI proceeds.
+    final state = context.read<AppState>();
+    final chatId = ctrl.chatId;
+    final me = state.me;
+    if (chatId != null && me != null) {
+      try {
+        await state.repo.sendControlMessage(
+          chatId,
+          me.id,
+          'call_reject',
+          jsonEncode({'reason': 'declined'}),
+        );
+      } catch (e) {
+        debugPrint('call_reject(declined) write failed: $e');
+      }
+    }
+    await ctrl.reject();
   }
 
   Widget _circleBtn({

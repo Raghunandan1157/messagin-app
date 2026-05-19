@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
@@ -197,8 +198,66 @@ class _ChatPaneState extends State<ChatPane> {
       );
       return;
     }
+
+    // 1. Write a `call_invite` control message into Neon so the callee's
+    //    CallInviteWatcher picks it up on its next poll and rings them.
+    final inviteExpiry = DateTime.now()
+        .toUtc()
+        .add(const Duration(seconds: 45))
+        .toIso8601String();
+    final inviteBody = jsonEncode({
+      'video': video,
+      'expires_at': inviteExpiry,
+    });
+    try {
+      await state.repo.sendControlMessage(
+        widget.chat.id,
+        me.id,
+        'call_invite',
+        inviteBody,
+      );
+    } catch (e) {
+      debugPrint('call_invite write failed: $e');
+      // Fall through; caller-side call still works if peer is already in room.
+    }
+
+    // 2. Kick the WebRTC side (join the signaling room).
     await ctrl.start(chatId: widget.chat.id, peerUserId: peer.id, video: video);
     if (!mounted) return;
+
+    // 3. 45s timeout: if call never connects, write a call_reject(no_answer)
+    //    so the invite stops haunting the chat and end the local call.
+    final callId = widget.chat.id;
+    final repo = state.repo;
+    final selfId = me.id;
+    final localCtrl = ctrl;
+    Timer(const Duration(seconds: 45), () {
+      // Only fire if we're still trying — already connected? Already torn
+      // down? Skip.
+      if (localCtrl.state == CallState.active ||
+          localCtrl.state == CallState.idle ||
+          localCtrl.state == CallState.ended) {
+        return;
+      }
+      // ignore: unawaited_futures
+      repo.sendControlMessage(
+        callId,
+        selfId,
+        'call_reject',
+        jsonEncode({'reason': 'no_answer'}),
+      ).catchError((e) {
+        debugPrint('call_reject(no_answer) write failed: $e');
+        return Message(
+          id: '',
+          chatId: callId,
+          senderId: selfId,
+          kind: 'call_reject',
+          createdAt: DateTime.now(),
+        );
+      });
+      localCtrl.end();
+    });
+
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => ChangeNotifierProvider<CallController>.value(
         value: ctrl!,
@@ -332,10 +391,15 @@ class _ChatPaneState extends State<ChatPane> {
                     );
                   },
                 )
-              : ListView.builder(
+              : Builder(builder: (_) {
+                  // Hide control envelopes (call_invite / call_reject) from the
+                  // user-visible message list. They drive UX, not chat content.
+                  final visible =
+                      _messages.where((m) => m.kind == 'text').toList();
+                  return ListView.builder(
                   controller: _scroll,
                   padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 60),
-                  itemCount: _messages.length + 1,
+                  itemCount: visible.length + 1,
                   itemBuilder: (_, i) {
                     if (i == 0) {
                       return Center(
@@ -358,9 +422,9 @@ class _ChatPaneState extends State<ChatPane> {
                       );
                     }
                     final idx = i - 1;
-                    final m = _messages[idx];
+                    final m = visible[idx];
                     final isMine = m.senderId == me.id;
-                    final prev = idx > 0 ? _messages[idx - 1] : null;
+                    final prev = idx > 0 ? visible[idx - 1] : null;
                     final showName = widget.chat.isGroup && !isMine && prev?.senderId != m.senderId;
                     final showTail = prev?.senderId != m.senderId;
                     final showDate = prev == null ||
@@ -401,7 +465,8 @@ class _ChatPaneState extends State<ChatPane> {
                       ],
                     );
                   },
-                ),
+                  );
+                }),
         ),
       ),
       Container(
