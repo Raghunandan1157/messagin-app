@@ -30,6 +30,7 @@ class _CallScreenState extends State<CallScreen> {
   CallController? _ctrl;
   MediaStream? _boundLocal;
   MediaStream? _boundRemote;
+  bool _closingRoute = false;
 
   @override
   void initState() {
@@ -69,11 +70,23 @@ class _CallScreenState extends State<CallScreen> {
     final c = _ctrl;
     if (c == null) return;
     _attachStreams(c);
-    // Bounce out of call UI when controller returns to idle.
-    if (c.state == CallState.idle) {
-      Navigator.of(context).maybePop();
+    // Bounce out of call UI when controller returns to idle. maybePop() is
+    // blocked by the PopScope below, so use an explicit programmatic pop.
+    if (c.state == CallState.idle || c.state == CallState.ended) {
+      _closeRoute();
+      return;
     }
     setState(() {});
+  }
+
+  void _closeRoute() {
+    if (_closingRoute) return;
+    _closingRoute = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final nav = Navigator.of(context);
+      if (nav.canPop()) nav.pop();
+    });
   }
 
   @override

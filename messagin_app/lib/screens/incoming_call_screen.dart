@@ -22,6 +22,7 @@ class IncomingCallScreen extends StatefulWidget {
 
 class _IncomingCallScreenState extends State<IncomingCallScreen> {
   CallController? _ctrl;
+  bool _closingRoute = false;
 
   @override
   void dispose() {
@@ -48,8 +49,18 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
         ),
       );
     } else if (c.state == CallState.idle || c.state == CallState.ended) {
-      Navigator.of(context).maybePop();
+      _closeRoute();
     }
+  }
+
+  void _closeRoute() {
+    if (_closingRoute) return;
+    _closingRoute = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final nav = Navigator.of(context);
+      if (nav.canPop()) nav.pop();
+    });
   }
 
   @override
