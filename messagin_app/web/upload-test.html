@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Upload test</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; max-width: 720px; margin: 40px auto; padding: 0 16px; color: #111; }
+    h1 { margin: 0 0 4px; }
+    .sub { color: #666; margin-bottom: 24px; font-size: 14px; }
+    .panel { border: 1px solid #ddd; border-radius: 8px; padding: 16px; margin-bottom: 24px; }
+    label { display: block; font-size: 13px; color: #444; margin-bottom: 6px; }
+    input[type=text] { width: 100%; padding: 8px 10px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; box-sizing: border-box; }
+    input[type=file] { display: block; margin: 12px 0; }
+    button { background: #128c7e; color: white; border: 0; padding: 10px 18px; border-radius: 6px; font-size: 14px; cursor: pointer; }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .err { color: #c62828; font-size: 13px; margin-top: 8px; }
+    .ok { color: #2e7d32; font-size: 13px; margin-top: 8px; }
+    ul { list-style: none; padding: 0; }
+    li { border-bottom: 1px solid #eee; padding: 12px 0; display: flex; gap: 12px; align-items: flex-start; }
+    li img { max-width: 160px; max-height: 160px; border-radius: 6px; object-fit: cover; }
+    li audio { width: 320px; }
+    .meta { font-size: 13px; color: #555; }
+    .meta a { color: #128c7e; }
+  </style>
+</head>
+<body>
+  <h1>Upload test</h1>
+  <div class="sub">POSTs to <code>/api/upload</code> · GETs from <code>/api/attachments</code> · Bearer auth (API_TOKEN).</div>
+
+  <div class="panel">
+    <label>API_TOKEN (one-time, stored in localStorage)</label>
+    <input id="tok" type="text" placeholder="paste API_TOKEN" />
+    <label style="margin-top:12px">userId</label>
+    <input id="uid" type="text" value="00000000-0000-0000-0000-000000000001" />
+    <input id="f" type="file" accept="image/*,audio/*" />
+    <button id="up">Upload</button>
+    <button id="ref">Refresh list</button>
+    <div id="msg"></div>
+  </div>
+
+  <h2>Files</h2>
+  <ul id="list"></ul>
+
+  <script>
+    const tokEl = document.getElementById('tok');
+    const uidEl = document.getElementById('uid');
+    const fileEl = document.getElementById('f');
+    const upBtn = document.getElementById('up');
+    const refBtn = document.getElementById('ref');
+    const msg = document.getElementById('msg');
+    const list = document.getElementById('list');
+
+    tokEl.value = localStorage.getItem('api_token') || '';
+    tokEl.addEventListener('input', () => localStorage.setItem('api_token', tokEl.value));
+
+    function bearer() {
+      return tokEl.value ? { Authorization: 'Bearer ' + tokEl.value } : {};
+    }
+
+    async function refresh() {
+      msg.innerHTML = '';
+      try {
+        const res = await fetch('/api/attachments?userId=' + encodeURIComponent(uidEl.value), {
+          headers: bearer(),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || res.status);
+        render(data);
+      } catch (e) {
+        msg.innerHTML = '<div class="err">List failed: ' + e.message + '</div>';
+      }
+    }
+
+    function render(rows) {
+      list.innerHTML = '';
+      for (const r of rows) {
+        const li = document.createElement('li');
+        const preview = document.createElement('div');
+        if ((r.mime_type || '').startsWith('image/')) {
+          preview.innerHTML = '<img src="' + r.url + '" alt="' + r.filename + '" />';
+        } else if ((r.mime_type || '').startsWith('audio/')) {
+          preview.innerHTML = '<audio controls src="' + r.url + '"></audio>';
+        } else {
+          preview.textContent = '[' + r.mime_type + ']';
+        }
+        const meta = document.createElement('div');
+        meta.className = 'meta';
+        meta.innerHTML = '<div><strong>' + r.filename + '</strong></div>'
+          + '<div>' + r.mime_type + ' · ' + new Date(r.uploaded_at).toLocaleString() + '</div>'
+          + '<div><a href="' + r.url + '" target="_blank">open blob</a></div>';
+        li.appendChild(preview);
+        li.appendChild(meta);
+        list.appendChild(li);
+      }
+    }
+
+    upBtn.addEventListener('click', async () => {
+      msg.innerHTML = '';
+      const file = fileEl.files[0];
+      if (!file) { msg.innerHTML = '<div class="err">pick a file first</div>'; return; }
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('userId', uidEl.value);
+      upBtn.disabled = true;
+      try {
+        const res = await fetch('/api/upload', {
+          method: 'POST',
+          headers: bearer(),
+          body: fd,
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || res.status);
+        msg.innerHTML = '<div class="ok">uploaded: ' + data.filename + '</div>';
+        await refresh();
+      } catch (e) {
+        msg.innerHTML = '<div class="err">' + e.message + '</div>';
+      } finally {
+        upBtn.disabled = false;
+      }
+    });
+
+    refBtn.addEventListener('click', refresh);
+    refresh();
+  </script>
+</body>
+</html>

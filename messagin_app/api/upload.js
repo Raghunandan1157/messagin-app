@@ -1,102 +1,117 @@
-import { put } from '@vercel/blob';
-import { neon } from '@neondatabase/serverless';
+import {
+  corsHeaders,
+  ensureAttachmentsTable,
+  getDbClient,
+  parseMultipart,
+  uploadToBlob,
+  validateMime,
+  MAX_BYTES,
+} from './_lib/blob.js';
 
 export const config = {
-  api: {
-    bodyParser: false,
-  },
+  api: { bodyParser: false },
 };
 
-// Reads raw body bytes from an incoming request stream.
-async function readBody(req) {
-  const chunks = [];
-  for await (const chunk of req) {
-    chunks.push(chunk);
-  }
-  return Buffer.concat(chunks);
-}
-
-// POST /api/upload?chatId=...&uploaderId=...&kind=image|audio|file&name=foo.jpg
-// Body: raw file bytes (Content-Type set to the file's mime).
-// Response: { id, url, kind, mime, size }
+// POST /api/upload
+// Two body shapes supported:
+//   1. multipart/form-data — fields: file (required), userId (or uploaderId),
+//      optional chatId, kind. Spec-compliant path.
+//   2. Raw bytes — Content-Type = file mime. Query string supplies metadata:
+//      ?chatId=&uploaderId=&kind=&name=. Used by the Flutter web client.
 export default async function handler(req, res) {
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  corsHeaders(res);
   if (req.method === 'OPTIONS') return res.status(204).end();
   if (req.method !== 'POST') return res.status(405).json({ error: 'POST only' });
 
+  // Bearer token guard.
   const auth = req.headers.authorization || '';
   const token = auth.replace(/^Bearer\s+/i, '');
   const expected = process.env.API_TOKEN;
   if (!expected) return res.status(500).json({ error: 'Server missing API_TOKEN' });
   if (token !== expected) return res.status(401).json({ error: 'Unauthorized' });
 
-  const blobToken = process.env.BLOB_READ_WRITE_TOKEN;
-  if (!blobToken) {
-    return res.status(500).json({
-      error: 'Server missing BLOB_READ_WRITE_TOKEN — provision Vercel Blob store and add the token in Project Settings → Environment Variables.',
-    });
+  let sql;
+  try { sql = getDbClient(); } catch (e) { return res.status(500).json({ error: e.message }); }
+
+  try { await ensureAttachmentsTable(sql); } catch (e) {
+    return res.status(500).json({ error: `schema ensure failed: ${e.message}` });
   }
 
-  const dbUrl = process.env.DATABASE_URL;
-  if (!dbUrl) return res.status(500).json({ error: 'Server missing DATABASE_URL' });
+  const ctype = (req.headers['content-type'] || '').toLowerCase();
+  let buffer;
+  let filename;
+  let mime;
+  let userId;
+  let chatId;
+  let kind;
 
-  const url = new URL(req.url, `http://${req.headers.host}`);
-  const chatId = url.searchParams.get('chatId');
-  const uploaderId = url.searchParams.get('uploaderId');
-  const kind = url.searchParams.get('kind') || 'file';
-  const name = url.searchParams.get('name') || `upload-${Date.now()}`;
-  const mime = req.headers['content-type'] || 'application/octet-stream';
-
-  if (!chatId || !uploaderId) {
-    return res.status(400).json({ error: 'chatId and uploaderId required' });
-  }
-
-  let buf;
   try {
-    buf = await readBody(req);
+    if (ctype.startsWith('multipart/form-data')) {
+      const { fields, files } = await parseMultipart(req);
+      const f = files.file;
+      if (!f) return res.status(400).json({ error: 'Missing form field: file' });
+      buffer = f.buffer;
+      filename = f.filename;
+      mime = f.mime;
+      userId = fields.userId || fields.uploaderId;
+      chatId = fields.chatId || null;
+      kind = fields.kind || (mime?.startsWith('image/') ? 'image' : mime?.startsWith('audio/') ? 'audio' : 'file');
+      if (!userId) return res.status(400).json({ error: 'Missing form field: userId' });
+    } else {
+      // Raw-body path: query params + body bytes.
+      const url = new URL(req.url, `http://${req.headers.host}`);
+      userId = url.searchParams.get('userId') || url.searchParams.get('uploaderId');
+      chatId = url.searchParams.get('chatId');
+      kind = url.searchParams.get('kind') || 'file';
+      filename = url.searchParams.get('name') || `upload-${Date.now()}`;
+      mime = req.headers['content-type'] || 'application/octet-stream';
+      if (!userId) return res.status(400).json({ error: 'userId query param required' });
+      const chunks = [];
+      for await (const c of req) chunks.push(c);
+      buffer = Buffer.concat(chunks);
+    }
   } catch (e) {
-    return res.status(400).json({ error: `body read failed: ${e?.message || e}` });
-  }
-  if (!buf || buf.length === 0) {
-    return res.status(400).json({ error: 'Empty body' });
+    return res.status(400).json({ error: `body parse failed: ${e.message}` });
   }
 
-  // Path inside the Blob store: chats/<chatId>/<timestamp>-<filename>.
-  const safeName = name.replace(/[^a-zA-Z0-9._-]+/g, '_');
-  const path = `chats/${chatId}/${Date.now()}-${safeName}`;
+  if (!buffer || buffer.length === 0) {
+    return res.status(400).json({ error: 'Empty file' });
+  }
+  if (buffer.length > MAX_BYTES) {
+    return res.status(400).json({ error: `File too large (${buffer.length} > ${MAX_BYTES} bytes)` });
+  }
+  if (!validateMime(mime)) {
+    return res.status(400).json({ error: `Disallowed MIME: ${mime}. Allowed: image/*, audio/*` });
+  }
 
-  let blobUrl;
+  let blob;
   try {
-    const blob = await put(path, buf, {
-      access: 'public',
-      contentType: mime,
-      token: blobToken,
-    });
-    blobUrl = blob.url;
+    blob = await uploadToBlob({ buffer, filename, mime });
   } catch (e) {
-    return res.status(500).json({ error: `blob put failed: ${e?.message || e}` });
+    return res.status(500).json({ error: `blob upload failed: ${e.message}` });
   }
 
-  const sql = neon(dbUrl);
   let row;
   try {
     const rows = await sql(
-      `INSERT INTO attachments (chat_id, uploader_id, kind, storage, url, mime, size_bytes)
-       VALUES ($1, $2, $3, 'blob', $4, $5, $6) RETURNING *`,
-      [chatId, uploaderId, kind, blobUrl, mime, buf.length],
+      `INSERT INTO attachments
+         (chat_id, uploader_id, user_id, filename, kind, storage, url, mime, mime_type, size_bytes)
+       VALUES ($1, $2, $3, $4, $5, 'blob', $6, $7, $7, $8)
+       RETURNING id, filename, url, mime_type, uploaded_at`,
+      [chatId, userId, userId, filename, kind, blob.url, mime, buffer.length],
     );
     row = rows[0];
   } catch (e) {
-    return res.status(500).json({ error: `attachment insert failed: ${e?.message || e}` });
+    return res.status(500).json({ error: `attachment insert failed: ${e.message}` });
   }
 
   return res.status(200).json({
     id: row.id,
     url: row.url,
-    kind: row.kind,
-    mime: row.mime,
-    size: row.size_bytes,
+    filename: row.filename,
+    mime: row.mime_type,
+    size: buffer.length,
+    kind,
+    uploaded_at: row.uploaded_at,
   });
 }
