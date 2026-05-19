@@ -1,13 +1,16 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
 import '../calls/call_controller.dart';
+import '../calls/signaling.dart';
 import '../models/chat.dart';
 import '../models/message.dart';
 import '../models/reaction.dart';
 import '../models/user.dart';
+import '../services/upload_service.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/avatar.dart';
@@ -17,6 +20,10 @@ import '../widgets/skeletons.dart';
 import 'call_screen.dart';
 
 const _uuid = Uuid();
+
+bool _isVisibleKind(String kind) {
+  return kind == 'text' || kind == 'image' || kind == 'audio';
+}
 
 class ChatPane extends StatefulWidget {
   final Chat chat;
@@ -50,6 +57,13 @@ class _ChatPaneState extends State<ChatPane> {
   bool _showJumpToBottom = false;
   Message? _replyingTo;
   Set<String> _peerReadIds = {};
+  bool _uploading = false;
+  final _uploadSvc = UploadService();
+  StreamSubscription? _sigSub;
+  bool _peerTyping = false;
+  Timer? _typingStopTimer;
+  Timer? _localTypingDebounce;
+  bool _sentTypingTrue = false;
 
   @override
   void initState() {
@@ -57,6 +71,7 @@ class _ChatPaneState extends State<ChatPane> {
     _input.addListener(() {
       final has = _input.text.trim().isNotEmpty;
       if (has != _hasText) setState(() => _hasText = has);
+      _onInputChanged();
     });
     _load();
     _poll = Timer.periodic(const Duration(seconds: 3), (_) {
@@ -67,10 +82,73 @@ class _ChatPaneState extends State<ChatPane> {
     _markChatRead();
     _refreshPeerReads();
     _refreshPeerPresence();
+    _wireTyping();
     _presencePoll = Timer.periodic(
       const Duration(seconds: 15),
       (_) => _refreshPeerPresence(),
     );
+  }
+
+  Future<void> _pickAndSendImage() async {
+    final state = context.read<AppState>();
+    final me = state.me;
+    if (me == null) return;
+    final picked = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      withData: true,
+    );
+    if (picked == null || picked.files.isEmpty) return;
+    final f = picked.files.first;
+    final bytes = f.bytes;
+    if (bytes == null) return;
+    final mime = _guessImageMime(f.name);
+    setState(() => _uploading = true);
+    try {
+      final res = await _uploadSvc.upload(
+        bytes: bytes,
+        name: f.name,
+        mime: mime,
+        kind: 'image',
+        chatId: widget.chat.id,
+        uploaderId: me.id,
+      );
+      final body = jsonEncode({
+        'url': res.url,
+        'mime': res.mime,
+        'size': res.size,
+        'attachment_id': res.id,
+      });
+      final m = await state.repo.sendMediaMessage(
+        widget.chat.id,
+        me.id,
+        'image',
+        body,
+      );
+      if (!mounted) return;
+      setState(() => _messages.add(m));
+      final visibleCount = _messages.where((x) => _isVisibleKind(x.kind)).length;
+      _listKey.currentState?.insertItem(
+        visibleCount,
+        duration: const Duration(milliseconds: 350),
+      );
+      _scrollToBottom();
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Upload failed: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _uploading = false);
+    }
+  }
+
+  String _guessImageMime(String name) {
+    final lower = name.toLowerCase();
+    if (lower.endsWith('.png')) return 'image/png';
+    if (lower.endsWith('.gif')) return 'image/gif';
+    if (lower.endsWith('.webp')) return 'image/webp';
+    if (lower.endsWith('.heic')) return 'image/heic';
+    return 'image/jpeg';
   }
 
   Future<void> _markChatRead() async {
@@ -144,9 +222,63 @@ class _ChatPaneState extends State<ChatPane> {
   void dispose() {
     _poll?.cancel();
     _presencePoll?.cancel();
+    _typingStopTimer?.cancel();
+    _localTypingDebounce?.cancel();
+    _sigSub?.cancel();
+    _maybeStopTyping(force: true);
+    _unwireTyping();
     _input.dispose();
     _scroll.dispose();
     super.dispose();
+  }
+
+  SignalingClient? _signaling() {
+    try {
+      return context.read<CallController>().signaling;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _wireTyping() {
+    final sig = _signaling();
+    if (sig == null) return;
+    sig.chatSubscribe(widget.chat.id);
+    final selfId = context.read<AppState>().me?.id;
+    _sigSub = sig.messages.listen((m) {
+      if (m.type != 'chat-typing') return;
+      if (m.raw['chatId'] != widget.chat.id) return;
+      if (m.raw['userId'] == selfId) return;
+      final isTyping = m.raw['isTyping'] == true;
+      if (mounted && _peerTyping != isTyping) {
+        setState(() => _peerTyping = isTyping);
+      }
+    });
+  }
+
+  void _unwireTyping() {
+    final sig = _signaling();
+    sig?.chatUnsubscribe(widget.chat.id);
+  }
+
+  void _onInputChanged() {
+    final sig = _signaling();
+    if (sig == null) return;
+    if (!_sentTypingTrue) {
+      sig.sendTyping(widget.chat.id, true);
+      _sentTypingTrue = true;
+    }
+    _typingStopTimer?.cancel();
+    _typingStopTimer = Timer(const Duration(seconds: 3), () {
+      _maybeStopTyping();
+    });
+  }
+
+  void _maybeStopTyping({bool force = false}) {
+    if (!_sentTypingTrue && !force) return;
+    final sig = _signaling();
+    sig?.sendTyping(widget.chat.id, false);
+    _sentTypingTrue = false;
   }
 
   Future<void> _load() async {
@@ -167,7 +299,7 @@ class _ChatPaneState extends State<ChatPane> {
           _loading = false;
         });
         for (final m in loaded) {
-          final isVisible = m.kind == 'text';
+          final isVisible = _isVisibleKind(m.kind);
           if (isVisible) {
             await Future.delayed(const Duration(milliseconds: 30));
             if (!mounted) return;
@@ -175,7 +307,7 @@ class _ChatPaneState extends State<ChatPane> {
           setState(() => _messages.add(m));
           if (isVisible) {
             final visibleCount =
-                _messages.where((x) => x.kind == 'text').length;
+                _messages.where((x) => _isVisibleKind(x.kind)).length;
             _listKey.currentState?.insertItem(
               visibleCount,
               duration: const Duration(milliseconds: 350),
@@ -218,11 +350,11 @@ class _ChatPaneState extends State<ChatPane> {
         final novel = fresh.where((m) => !seen.contains(m.id)).toList();
         if (novel.isNotEmpty && mounted) {
           for (final m in novel) {
-            final isVisible = m.kind == 'text';
+            final isVisible = _isVisibleKind(m.kind);
             setState(() => _messages.add(m));
             if (isVisible) {
               final visibleCount =
-                  _messages.where((x) => x.kind == 'text').length;
+                  _messages.where((x) => _isVisibleKind(x.kind)).length;
               _listKey.currentState?.insertItem(
                 visibleCount,
                 duration: const Duration(milliseconds: 350),
@@ -262,6 +394,7 @@ class _ChatPaneState extends State<ChatPane> {
     final state = context.read<AppState>();
     final me = state.me!;
 
+    _maybeStopTyping(force: true);
     final replyId = _replyingTo?.id;
     final tempId = 'local-${_uuid.v4()}';
     final temp = Message(
@@ -280,7 +413,7 @@ class _ChatPaneState extends State<ChatPane> {
       _sending = true;
       _replyingTo = null;
     });
-    final visibleCount = _messages.where((m) => m.kind == 'text').length;
+    final visibleCount = _messages.where((m) => _isVisibleKind(m.kind)).length;
     _listKey.currentState?.insertItem(
       visibleCount,
       duration: const Duration(milliseconds: 350),
@@ -302,7 +435,7 @@ class _ChatPaneState extends State<ChatPane> {
         } else {
           _messages.add(m);
           final newVisibleCount =
-              _messages.where((x) => x.kind == 'text').length;
+              _messages.where((x) => _isVisibleKind(x.kind)).length;
           _listKey.currentState?.insertItem(
             newVisibleCount,
             duration: const Duration(milliseconds: 350),
@@ -311,7 +444,7 @@ class _ChatPaneState extends State<ChatPane> {
       });
     } catch (e) {
       if (!mounted) return;
-      final visible = _messages.where((m) => m.kind == 'text').toList();
+      final visible = _messages.where((m) => _isVisibleKind(m.kind)).toList();
       final removeIndex = visible.indexWhere((x) => x.id == tempId);
       if (removeIndex >= 0) {
         _listKey.currentState?.removeItem(
@@ -649,6 +782,18 @@ class _ChatPaneState extends State<ChatPane> {
                       ),
                     ),
                     Builder(builder: (_) {
+                      if (_peerTyping && !widget.chat.isGroup) {
+                        return const Text(
+                          'typing…',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: WAColors.brand,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        );
+                      }
                       final subtitle = widget.chat.isGroup
                           ? widget.chat.members
                                 .map((m) => m.id == me.id ? 'You' : m.name)
@@ -732,7 +877,7 @@ class _ChatPaneState extends State<ChatPane> {
                 : Builder(
                     builder: (_) {
                       final visible = _messages
-                          .where((m) => m.kind == 'text')
+                          .where((m) => _isVisibleKind(m.kind))
                           .toList();
                       return AnimatedList(
                         key: _listKey,
@@ -942,6 +1087,15 @@ class _ChatPaneState extends State<ChatPane> {
                 ),
                 onPressed: () =>
                     setState(() => _showEmojiPanel = !_showEmojiPanel),
+              ),
+              IconButton(
+                icon: const Icon(
+                  Icons.attach_file,
+                  color: WAColors.mutedLight,
+                  size: 22,
+                ),
+                tooltip: 'Attach image',
+                onPressed: _uploading ? null : _pickAndSendImage,
               ),
               Expanded(
                 child: Container(

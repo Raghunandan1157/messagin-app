@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../models/message.dart';
@@ -211,6 +213,9 @@ class MessageBubble extends StatelessWidget {
   }
 
   Widget _bubbleContent(Color fg) {
+    if (message.kind == 'image' || message.kind == 'audio') {
+      return _mediaContent(fg);
+    }
     final body = message.body ?? '';
     final timeText = DateFormat.jm().format(message.createdAt.toLocal());
 
@@ -235,6 +240,93 @@ class MessageBubble extends StatelessWidget {
         Padding(padding: const EdgeInsets.only(top: 2), child: time),
       ],
     );
+  }
+
+  Widget _mediaContent(Color fg) {
+    final body = message.body ?? '{}';
+    Map<String, dynamic> meta;
+    try {
+      meta = jsonDecode(body) as Map<String, dynamic>;
+    } catch (_) {
+      meta = {};
+    }
+    final url = meta['url'] as String?;
+    final caption = meta['caption'] as String?;
+    final timeText = DateFormat.jm().format(message.createdAt.toLocal());
+    final time = Row(mainAxisSize: MainAxisSize.min, children: [
+      Text(timeText, style: TextStyle(fontSize: 11, color: WAColors.mutedLight)),
+      if (isMine) ...[
+        const SizedBox(width: 3),
+        Icon(
+          Icons.done_all,
+          size: 15,
+          color: peerRead ? WAColors.tickBlue : WAColors.mutedLight,
+        ),
+      ],
+    ]);
+
+    if (message.kind == 'image' && url != null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: Image.network(
+              url,
+              fit: BoxFit.cover,
+              loadingBuilder: (_, child, progress) {
+                if (progress == null) return child;
+                return Container(
+                  width: 240,
+                  height: 240,
+                  alignment: Alignment.center,
+                  color: Colors.black12,
+                  child: const CircularProgressIndicator(strokeWidth: 2),
+                );
+              },
+              errorBuilder: (_, e, st) => Container(
+                width: 200,
+                height: 100,
+                alignment: Alignment.center,
+                color: Colors.black12,
+                child: const Icon(Icons.broken_image, color: Colors.grey),
+              ),
+            ),
+          ),
+          if (caption != null && caption.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(caption, style: TextStyle(color: fg, fontSize: 14.5)),
+            ),
+          Padding(padding: const EdgeInsets.only(top: 4), child: time),
+        ],
+      );
+    }
+
+    if (message.kind == 'audio' && url != null) {
+      return Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.play_circle_fill, size: 36, color: WAColors.brand),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                'Voice message',
+                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+              ),
+              const SizedBox(height: 2),
+              time,
+            ],
+          ),
+        ],
+      );
+    }
+
+    return Text('[unsupported $url]', style: TextStyle(color: fg));
   }
 
   Widget _buildLinkifiedText(String body, Color fg) {

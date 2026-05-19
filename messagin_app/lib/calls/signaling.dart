@@ -225,6 +225,16 @@ class SignalingClient {
 
   void leaveRoom() => _send({'type': 'leave'});
 
+  // Chat-channel pub/sub (typing indicators). Separate from call rooms.
+  void chatSubscribe(String chatId) =>
+      _send({'type': 'chat-subscribe', 'chatId': chatId});
+
+  void chatUnsubscribe(String chatId) =>
+      _send({'type': 'chat-unsubscribe', 'chatId': chatId});
+
+  void sendTyping(String chatId, bool isTyping) =>
+      _send({'type': 'chat-typing', 'chatId': chatId, 'isTyping': isTyping});
+
   void sendOffer(String targetPeerId, Map<String, dynamic> offer) =>
       _send({'type': 'offer', 'targetPeerId': targetPeerId, 'offer': offer});
 

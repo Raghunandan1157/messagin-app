@@ -102,6 +102,51 @@ function removeFromRoom(ws) {
   ws.ctx = { peerId, roomId: null, userId: ctx.userId ?? null };
 }
 
+// --- Chat-channel pub/sub (typing indicators, future presence) ---------
+// Keyed by chatId. Separate from rooms so it doesn't trip the call FSM.
+const chatSubs = new Map(); // chatId -> Set<ws>
+
+function chatSubscribe(ws, chatId) {
+  if (!chatId) return;
+  let set = chatSubs.get(chatId);
+  if (!set) { set = new Set(); chatSubs.set(chatId, set); }
+  set.add(ws);
+  ws.ctx.chatSubs = ws.ctx.chatSubs || new Set();
+  ws.ctx.chatSubs.add(chatId);
+}
+
+function chatUnsubscribe(ws, chatId) {
+  if (!chatId) return;
+  const set = chatSubs.get(chatId);
+  if (set) {
+    set.delete(ws);
+    if (set.size === 0) chatSubs.delete(chatId);
+  }
+  ws.ctx.chatSubs?.delete(chatId);
+}
+
+function chatUnsubscribeAll(ws) {
+  const subs = ws.ctx?.chatSubs;
+  if (!subs) return;
+  for (const cid of subs) {
+    const set = chatSubs.get(cid);
+    if (set) {
+      set.delete(ws);
+      if (set.size === 0) chatSubs.delete(cid);
+    }
+  }
+  subs.clear();
+}
+
+function chatBroadcast(chatId, payload, exceptWs) {
+  const set = chatSubs.get(chatId);
+  if (!set) return;
+  for (const w of set) {
+    if (w === exceptWs) continue;
+    sendJson(w, payload);
+  }
+}
+
 // --- HTTP --------------------------------------------------------------
 
 const CORS_HEADERS = {
@@ -201,6 +246,30 @@ wss.on('connection', (ws) => {
         return;
       }
 
+      case 'chat-subscribe': {
+        const { chatId } = msg;
+        chatSubscribe(ws, chatId);
+        return;
+      }
+
+      case 'chat-unsubscribe': {
+        const { chatId } = msg;
+        chatUnsubscribe(ws, chatId);
+        return;
+      }
+
+      case 'chat-typing': {
+        const { chatId, isTyping } = msg;
+        if (!chatId) return;
+        chatBroadcast(chatId, {
+          type: 'chat-typing',
+          chatId,
+          userId: ws.ctx.userId ?? null,
+          isTyping: !!isTyping,
+        }, ws);
+        return;
+      }
+
       case 'offer':
       case 'answer':
       case 'ice-candidate': {
@@ -228,8 +297,8 @@ wss.on('connection', (ws) => {
     }
   });
 
-  ws.on('close', () => { removeFromRoom(ws); });
-  ws.on('error', () => { removeFromRoom(ws); });
+  ws.on('close', () => { removeFromRoom(ws); chatUnsubscribeAll(ws); });
+  ws.on('error', () => { removeFromRoom(ws); chatUnsubscribeAll(ws); });
 });
 
 // Heartbeat — evict zombies every 30s.

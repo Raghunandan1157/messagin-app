@@ -209,6 +209,20 @@ class Repository {
     return rows.map(Message.fromRow).toList();
   }
 
+  Future<Message> sendMediaMessage(
+    String chatId,
+    String senderId,
+    String kind,
+    String bodyJson,
+  ) async {
+    final rows = await db.query(
+      '''INSERT INTO messages (chat_id, sender_id, body, kind)
+         VALUES (@c, @s, @b, @k) RETURNING *''',
+      params: {'c': chatId, 's': senderId, 'b': bodyJson, 'k': kind},
+    );
+    return Message.fromRow(rows.first);
+  }
+
   Future<Message> sendMessage(
     String chatId,
     String senderId,
