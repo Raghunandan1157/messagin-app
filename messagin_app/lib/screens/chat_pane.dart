@@ -382,6 +382,12 @@ class _ChatPaneState extends State<ChatPane> {
     );
   }
 
+  Future<void> _onDoubleTap(Message m) async {
+    final state = context.read<AppState>();
+    await state.repo.toggleReaction(m.id, state.me!.id, '❤️');
+    await _pollNew();
+  }
+
   Future<void> _onLongPress(Message m, Offset pos) async {
     final picked = await showReactionPicker(context, pos);
     if (picked == null) return;
@@ -762,6 +768,7 @@ class _ChatPaneState extends State<ChatPane> {
                                     reactions: rs,
                                     showTail: showTail,
                                     onLongPress: (pos) => _onLongPress(m, pos),
+                                    onDoubleTap: () => _onDoubleTap(m),
                                   ),
                                 ),
                               ],

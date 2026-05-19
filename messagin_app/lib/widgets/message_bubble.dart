@@ -13,6 +13,7 @@ class MessageBubble extends StatelessWidget {
   final bool showTail;
   final List<Reaction> reactions;
   final void Function(Offset globalPosition)? onLongPress;
+  final VoidCallback? onDoubleTap;
   final Animation<double>? animation;
 
   const MessageBubble({
@@ -25,6 +26,7 @@ class MessageBubble extends StatelessWidget {
     this.showTail = true,
     this.reactions = const [],
     this.onLongPress,
+    this.onDoubleTap,
     this.animation,
   });
 
@@ -52,6 +54,7 @@ class MessageBubble extends StatelessWidget {
     final bubbleMaxWidth = (screenW * 0.65).clamp(140.0, 520.0);
     final bubble = GestureDetector(
       onLongPressStart: (d) => onLongPress?.call(d.globalPosition),
+      onDoubleTap: onDoubleTap,
       child: Container(
         constraints: BoxConstraints(maxWidth: bubbleMaxWidth),
         margin: EdgeInsets.only(
@@ -179,10 +182,45 @@ class MessageBubble extends StatelessWidget {
       alignment: WrapAlignment.end,
       crossAxisAlignment: WrapCrossAlignment.end,
       children: [
-        Text(body, style: TextStyle(color: fg, fontSize: 14.5, height: 1.35)),
+        _buildLinkifiedText(body, fg),
         const SizedBox(width: 8),
         Padding(padding: const EdgeInsets.only(top: 2), child: time),
       ],
+    );
+  }
+
+  Widget _buildLinkifiedText(String body, Color fg) {
+    final urlRe = RegExp(
+      r'((https?://|www\.)[^\s]+)',
+      caseSensitive: false,
+    );
+    final matches = urlRe.allMatches(body).toList();
+    if (matches.isEmpty) {
+      return Text(body, style: TextStyle(color: fg, fontSize: 14.5, height: 1.35));
+    }
+    final spans = <TextSpan>[];
+    var cursor = 0;
+    for (final m in matches) {
+      if (m.start > cursor) {
+        spans.add(TextSpan(text: body.substring(cursor, m.start)));
+      }
+      spans.add(TextSpan(
+        text: m.group(0),
+        style: const TextStyle(
+          color: Color(0xFF027EB5),
+          decoration: TextDecoration.underline,
+        ),
+      ));
+      cursor = m.end;
+    }
+    if (cursor < body.length) {
+      spans.add(TextSpan(text: body.substring(cursor)));
+    }
+    return RichText(
+      text: TextSpan(
+        style: TextStyle(color: fg, fontSize: 14.5, height: 1.35),
+        children: spans,
+      ),
     );
   }
 
@@ -307,6 +345,7 @@ class SlideInBubble extends StatelessWidget {
   final bool showTail;
   final List<Reaction> reactions;
   final void Function(Offset globalPosition)? onLongPress;
+  final VoidCallback? onDoubleTap;
 
   const SlideInBubble({
     super.key,
@@ -319,6 +358,7 @@ class SlideInBubble extends StatelessWidget {
     this.showTail = true,
     this.reactions = const [],
     this.onLongPress,
+    this.onDoubleTap,
   });
 
   @override
@@ -334,6 +374,7 @@ class SlideInBubble extends StatelessWidget {
         showTail: showTail,
         reactions: reactions,
         onLongPress: onLongPress,
+        onDoubleTap: onDoubleTap,
       ),
     );
   }
