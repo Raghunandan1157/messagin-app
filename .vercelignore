@@ -1,0 +1,15 @@
+messagin_app/.dart_tool/
+messagin_app/.gradle/
+messagin_app/.idea/
+messagin_app/build/
+messagin_app/android/.gradle/
+messagin_app/android/local.properties
+messagin_app/ios/Pods/
+messagin_app/ios/.symlinks/
+messagin_app/linux/build/
+messagin_app/macos/Pods/
+messagin_app/windows/build/
+messagin_app/.flutter-plugins
+messagin_app/.flutter-plugins-dependencies
+messagin_app/*.iml
+.DS_Store

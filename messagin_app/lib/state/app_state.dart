@@ -1,11 +1,9 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import '../calls/signal_endpoint.dart';
 import '../db/local_cache.dart';
 import '../db/neon_client.dart';
 import '../db/repository.dart';
@@ -56,51 +54,20 @@ class AppState extends ChangeNotifier {
   Future<String?> _signalingHttpBase() async {
     // 1. Native: prefer the local override file the `call` shortcut writes.
     if (!kIsWeb) {
-      try {
-        final home = Platform.environment['HOME'] ??
-            Platform.environment['USERPROFILE'];
-        if (home != null) {
-          final f = File('$home/.messagin-signal.json');
-          if (await f.exists()) {
-            final j = jsonDecode(await f.readAsString());
-            final https = (j is Map ? j['https'] : null) as String?;
-            if (https != null && https.isNotEmpty) return https;
-            final wss = (j is Map ? j['wss'] : null) as String?;
-            if (wss != null && wss.isNotEmpty) {
-              return wss
-                  .replaceFirst(RegExp(r'^wss://'), 'https://')
-                  .replaceFirst(RegExp(r'^ws://'), 'http://');
-            }
-          }
-        }
-      } catch (_) {}
+      final local = await localOverrideHttpBase();
+      if (local != null && local.isNotEmpty) return local;
     }
     // 2. Native fallback + web: ask Vercel for the current published WSS.
+    // Relative API_ENDPOINT values like `/api/sql` resolve against Uri.base
+    // on web so the deployed app can use its own `/api/signal-url` route.
     try {
-      final apiBase = dotenv.env['API_ENDPOINT']
-              ?.replaceFirst(RegExp(r'/api/sql$'), '') ??
-          '';
-      if (apiBase.isNotEmpty) {
-        final resp = await http
-            .get(Uri.parse('$apiBase/api/signal-url'))
-            .timeout(const Duration(seconds: 4));
-        if (resp.statusCode == 200) {
-          final j = jsonDecode(resp.body) as Map<String, dynamic>;
-          final wss = j['wss'] as String?;
-          if (wss != null && wss.isNotEmpty) {
-            return wss
-                .replaceFirst(RegExp(r'^wss://'), 'https://')
-                .replaceFirst(RegExp(r'^ws://'), 'http://');
-          }
-        }
-      }
+      final wss = await publishedSignalWss();
+      if (wss != null && wss.isNotEmpty) return signalHttpBaseFromWss(wss);
     } catch (_) {}
-    // 3. Web has no localhost to fall back to — report no-base.
-    if (kIsWeb) return null;
-    final wss = dotenv.env['SIGNAL_WSS_URL'] ?? 'ws://localhost:8787';
-    return wss
-        .replaceFirst(RegExp(r'^ws://'), 'http://')
-        .replaceFirst(RegExp(r'^wss://'), 'https://');
+    // 3. Explicit env override, then native localhost fallback.
+    final wss = configuredSignalWss();
+    if (wss != null) return signalHttpBaseFromWss(wss);
+    return kIsWeb ? null : 'http://localhost:8787';
   }
 
   Future<void> _checkServerHealth() async {
@@ -176,9 +143,7 @@ class AppState extends ChangeNotifier {
       // Defer heavy contact preload so it doesn't compete with HomeShell's
       // first paint + initial listChatsFor on a single shared pg connection.
       if (me != null) {
-        Future.delayed(const Duration(milliseconds: 1500), () {
-          preloadContacts();
-        });
+        _preloadContactsAfter(const Duration(milliseconds: 1500));
       }
     }
   }
@@ -198,8 +163,7 @@ class AppState extends ChangeNotifier {
     // Fire preload during splash so welcome stats can populate. Splash
     // doesn't trigger listChatsFor (HomeShell does that post-splash), so
     // no contention.
-    // ignore: unawaited_futures
-    preloadContacts();
+    _preloadContactsAfter(Duration.zero);
   }
 
   Future<void> resumeExisting(AppUser user) async {
@@ -208,8 +172,7 @@ class AppState extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('me_phone', user.phone);
     notifyListeners();
-    // ignore: unawaited_futures
-    preloadContacts();
+    _preloadContactsAfter(Duration.zero);
   }
 
   void clearJustSignedIn() {
@@ -217,7 +180,15 @@ class AppState extends ChangeNotifier {
     notifyListeners();
     // Splash is dismissed; HomeShell will mount now. Kick off the heavy
     // contact preload AFTER first frame so HomeShell's listChatsFor goes first.
-    Future.delayed(const Duration(milliseconds: 800), () {
+    _preloadContactsAfter(const Duration(milliseconds: 800));
+  }
+
+  void _preloadContactsAfter(Duration delay) {
+    // On web the deployed app shares one serverless SQL proxy path for inbox
+    // and directory calls. Loading the full directory eagerly can delay the
+    // first useful home/chat paint, so the New Chat screen loads it on demand.
+    if (kIsWeb) return;
+    Future.delayed(delay, () {
       preloadContacts();
     });
   }
@@ -243,8 +214,10 @@ class AppState extends ChangeNotifier {
   Future<void> preloadContacts({bool force = false}) async {
     // Single-flight: don't stack concurrent listUsers (1325 rows) calls.
     if (_contactsLoading) return;
-    final fresh = _contactsLoadedAt != null &&
-        DateTime.now().difference(_contactsLoadedAt!) < const Duration(minutes: 5);
+    final fresh =
+        _contactsLoadedAt != null &&
+        DateTime.now().difference(_contactsLoadedAt!) <
+            const Duration(minutes: 5);
     if (_contactsLoaded && fresh && !force) return;
     _contactsLoading = true;
     try {

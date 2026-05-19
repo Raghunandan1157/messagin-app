@@ -41,7 +41,7 @@ class CallController extends ChangeNotifier {
   CallState state = CallState.idle;
   String? peerUserId;
   String? peerPeerId; // server-assigned id of the remote peer
-  String? chatId;    // == roomId
+  String? chatId; // == roomId
   bool isVideo = false;
   bool micEnabled = true;
   bool camEnabled = true;
@@ -83,7 +83,9 @@ class CallController extends ChangeNotifier {
         for (final p in m.peers) {
           // Match by userId if the existing peer registered one; else accept
           // the only peer present.
-          if (peerUserId != null && p.userId != null && p.userId != peerUserId) {
+          if (peerUserId != null &&
+              p.userId != null &&
+              p.userId != peerUserId) {
             continue;
           }
           peerPeerId = p.peerId;
@@ -108,10 +110,12 @@ class CallController extends ChangeNotifier {
         await _ensurePeerConnection();
         peerPeerId = m.peerId;
         if (m.offer != null) {
-          await _pc!.setRemoteDescription(RTCSessionDescription(
-            m.offer!['sdp'] as String?,
-            m.offer!['type'] as String?,
-          ));
+          await _pc!.setRemoteDescription(
+            RTCSessionDescription(
+              m.offer!['sdp'] as String?,
+              m.offer!['type'] as String?,
+            ),
+          );
           _remoteSet = true;
           await _flushPendingIce();
           final answer = await _pc!.createAnswer({
@@ -129,10 +133,12 @@ class CallController extends ChangeNotifier {
         break;
       case 'answer':
         if (_pc != null && m.answer != null) {
-          await _pc!.setRemoteDescription(RTCSessionDescription(
-            m.answer!['sdp'] as String?,
-            m.answer!['type'] as String?,
-          ));
+          await _pc!.setRemoteDescription(
+            RTCSessionDescription(
+              m.answer!['sdp'] as String?,
+              m.answer!['type'] as String?,
+            ),
+          );
           _remoteSet = true;
           await _flushPendingIce();
           state = CallState.connecting;
@@ -143,11 +149,13 @@ class CallController extends ChangeNotifier {
         final cand = m.candidate;
         if (cand == null) break;
         if (_pc != null && _remoteSet) {
-          await _pc!.addCandidate(RTCIceCandidate(
-            cand['candidate'] as String?,
-            cand['sdpMid'] as String?,
-            cand['sdpMLineIndex'] as int?,
-          ));
+          await _pc!.addCandidate(
+            RTCIceCandidate(
+              cand['candidate'] as String?,
+              cand['sdpMid'] as String?,
+              cand['sdpMLineIndex'] as int?,
+            ),
+          );
         } else {
           _pendingIce.add(cand);
         }
@@ -169,11 +177,13 @@ class CallController extends ChangeNotifier {
     if (_pc == null) return;
     for (final cand in _pendingIce) {
       try {
-        await _pc!.addCandidate(RTCIceCandidate(
-          cand['candidate'] as String?,
-          cand['sdpMid'] as String?,
-          cand['sdpMLineIndex'] as int?,
-        ));
+        await _pc!.addCandidate(
+          RTCIceCandidate(
+            cand['candidate'] as String?,
+            cand['sdpMid'] as String?,
+            cand['sdpMLineIndex'] as int?,
+          ),
+        );
       } catch (e) {
         debugPrint('flushIce failed: $e');
       }
@@ -215,9 +225,7 @@ class CallController extends ChangeNotifier {
     if (_localStream == null) {
       final constraints = <String, dynamic>{
         'audio': true,
-        'video': isVideo
-            ? {'facingMode': 'user'}
-            : false,
+        'video': isVideo ? {'facingMode': 'user'} : false,
       };
       try {
         _localStream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -266,12 +274,20 @@ class CallController extends ChangeNotifier {
 
   /// Start (or accept) a 1:1 call by joining the room `chatId`. The first
   /// joiner waits; the second joiner offers (per NAVA contract).
-  Future<void> start({
+  Future<bool> start({
     required String chatId,
     required String peerUserId,
     bool video = false,
   }) async {
-    if (state != CallState.idle && state != CallState.ended) return;
+    if (state != CallState.idle && state != CallState.ended) return false;
+    if (!signaling.connected.value) {
+      await signaling.connect();
+    }
+    if (!signaling.connected.value) {
+      errorMessage = 'Call relay unavailable. Try again shortly.';
+      notifyListeners();
+      return false;
+    }
     this.chatId = chatId;
     this.peerUserId = peerUserId;
     isVideo = video;
@@ -282,6 +298,7 @@ class CallController extends ChangeNotifier {
     // Acquire media up-front so PiP renders even while waiting.
     await _ensurePeerConnection();
     signaling.joinRoom(chatId);
+    return true;
   }
 
   /// Accept a pending incoming call (only meaningful once an app-level invite
@@ -291,6 +308,14 @@ class CallController extends ChangeNotifier {
     if (state != CallState.ringing) return;
     final id = chatId;
     if (id == null) return;
+    if (!signaling.connected.value) {
+      await signaling.connect();
+    }
+    if (!signaling.connected.value) {
+      errorMessage = 'Call relay unavailable. Try again shortly.';
+      notifyListeners();
+      return;
+    }
     state = CallState.connecting;
     notifyListeners();
     await _ensurePeerConnection();

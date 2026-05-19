@@ -36,15 +36,17 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
     // Once the user accepts, the controller leaves the `ringing` state.
     // Swap this screen for the in-call screen.
     if (c.state == CallState.connecting || c.state == CallState.active) {
-      Navigator.of(context).pushReplacement(MaterialPageRoute(
-        builder: (_) => ChangeNotifierProvider<CallController>.value(
-          value: c,
-          child: CallScreen(
-            peerName: widget.caller.name,
-            peerInitials: widget.caller.initials,
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => ChangeNotifierProvider<CallController>.value(
+            value: c,
+            child: CallScreen(
+              peerName: widget.caller.name,
+              peerInitials: widget.caller.initials,
+            ),
           ),
         ),
-      ));
+      );
     } else if (c.state == CallState.idle || c.state == CallState.ended) {
       Navigator.of(context).maybePop();
     }
@@ -64,47 +66,71 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
       child: Scaffold(
         backgroundColor: const Color(0xFF0B1414),
         body: SafeArea(
-          child: Column(children: [
-            const SizedBox(height: 48),
-            Text(
-              ctrl.isVideo ? 'Incoming video call' : 'Incoming voice call',
-              style: const TextStyle(color: Colors.white70, fontSize: 16),
-            ),
-            const Spacer(),
-            LoopAvatar(initials: widget.caller.initials, size: 140),
-            const SizedBox(height: 24),
-            Text(widget.caller.name,
+          child: Column(
+            children: [
+              const SizedBox(height: 48),
+              Text(
+                ctrl.isVideo ? 'Incoming video call' : 'Incoming voice call',
+                style: const TextStyle(color: Colors.white70, fontSize: 16),
+              ),
+              const Spacer(),
+              LoopAvatar(initials: widget.caller.initials, size: 140),
+              const SizedBox(height: 24),
+              Text(
+                widget.caller.name,
                 style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 30,
-                    fontWeight: FontWeight.w400)),
-            const SizedBox(height: 6),
-            Text(widget.caller.tagline,
+                  color: Colors.white,
+                  fontSize: 30,
+                  fontWeight: FontWeight.w400,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                widget.caller.tagline,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: Colors.white54, fontSize: 14)),
-            const Spacer(),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 48, vertical: 36),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  _circleBtn(
-                    icon: Icons.call_end,
-                    color: Colors.red,
-                    label: 'Decline',
-                    onTap: () => _decline(context, ctrl),
-                  ),
-                  _circleBtn(
-                    icon: ctrl.isVideo ? Icons.videocam : Icons.call,
-                    color: WAColors.brand,
-                    label: 'Accept',
-                    onTap: () => ctrl.accept(),
-                  ),
-                ],
+                style: const TextStyle(color: Colors.white54, fontSize: 14),
               ),
-            ),
-          ]),
+              if (ctrl.errorMessage != null) ...[
+                const SizedBox(height: 12),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 40),
+                  child: Text(
+                    ctrl.errorMessage!,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.redAccent,
+                      fontSize: 13,
+                    ),
+                  ),
+                ),
+              ],
+              const Spacer(),
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 48,
+                  vertical: 36,
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    _circleBtn(
+                      icon: Icons.call_end,
+                      color: Colors.red,
+                      label: 'Decline',
+                      onTap: () => _decline(context, ctrl),
+                    ),
+                    _circleBtn(
+                      icon: ctrl.isVideo ? Icons.videocam : Icons.call,
+                      color: WAColors.brand,
+                      label: 'Accept',
+                      onTap: () => ctrl.accept(),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -138,18 +164,24 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
     required String label,
     required VoidCallback onTap,
   }) {
-    return Column(mainAxisSize: MainAxisSize.min, children: [
-      GestureDetector(
-        onTap: onTap,
-        child: Container(
-          width: 72,
-          height: 72,
-          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-          child: Icon(icon, color: Colors.white, size: 32),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        GestureDetector(
+          onTap: onTap,
+          child: Container(
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+            child: Icon(icon, color: Colors.white, size: 32),
+          ),
         ),
-      ),
-      const SizedBox(height: 8),
-      Text(label, style: const TextStyle(color: Colors.white70, fontSize: 13)),
-    ]);
+        const SizedBox(height: 8),
+        Text(
+          label,
+          style: const TextStyle(color: Colors.white70, fontSize: 13),
+        ),
+      ],
+    );
   }
 }

@@ -31,12 +31,20 @@ class _OtpScreenState extends State<OtpScreen> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    _successAnim = AnimationController(vsync: this, duration: const Duration(milliseconds: 600));
-    _errorPulse = AnimationController(vsync: this, duration: const Duration(milliseconds: 500));
+    _successAnim = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    );
+    _errorPulse = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 500),
+    );
     for (final n in _nodes) {
       n.addListener(() => setState(() {}));
     }
-    WidgetsBinding.instance.addPostFrameCallback((_) => _nodes[0].requestFocus());
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _nodes[0].requestFocus(),
+    );
   }
 
   @override
@@ -91,8 +99,10 @@ class _OtpScreenState extends State<OtpScreen> with TickerProviderStateMixin {
           context,
           PageRouteBuilder(
             transitionDuration: const Duration(milliseconds: 350),
-            pageBuilder: (_, anim, _) => ProfileSetupScreen(phone: widget.phone),
-            transitionsBuilder: (_, anim, _, child) => FadeTransition(opacity: anim, child: child),
+            pageBuilder: (_, anim, _) =>
+                ProfileSetupScreen(phone: widget.phone),
+            transitionsBuilder: (_, anim, _, child) =>
+                FadeTransition(opacity: anim, child: child),
           ),
         );
       }
@@ -114,12 +124,12 @@ class _OtpScreenState extends State<OtpScreen> with TickerProviderStateMixin {
         final borderColor = _err != null
             ? Color.lerp(_border, const Color(0xFFB42318), errFlash)!
             : _success
-                ? WAColors.brand
-                : focused
-                    ? WAColors.brandDark
-                    : filled
-                        ? _ink
-                        : _border;
+            ? WAColors.brand
+            : focused
+            ? WAColors.brandDark
+            : filled
+            ? _ink
+            : _border;
         return AnimatedContainer(
           duration: const Duration(milliseconds: 180),
           curve: Curves.easeOut,
@@ -128,9 +138,18 @@ class _OtpScreenState extends State<OtpScreen> with TickerProviderStateMixin {
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: borderColor, width: focused || filled ? 1.6 : 1),
+            border: Border.all(
+              color: borderColor,
+              width: focused || filled ? 1.6 : 1,
+            ),
             boxShadow: focused
-                ? [BoxShadow(color: WAColors.brand.withValues(alpha: 0.10), blurRadius: 12, spreadRadius: 1)]
+                ? [
+                    BoxShadow(
+                      color: WAColors.brand.withValues(alpha: 0.10),
+                      blurRadius: 12,
+                      spreadRadius: 1,
+                    ),
+                  ]
                 : null,
           ),
           alignment: Alignment.center,
@@ -142,7 +161,12 @@ class _OtpScreenState extends State<OtpScreen> with TickerProviderStateMixin {
             textAlignVertical: TextAlignVertical.center,
             maxLength: 1,
             showCursor: false,
-            style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w600, color: _ink, height: 1.0),
+            style: const TextStyle(
+              fontSize: 26,
+              fontWeight: FontWeight.w600,
+              color: _ink,
+              height: 1.0,
+            ),
             inputFormatters: [FilteringTextInputFormatter.digitsOnly],
             decoration: const InputDecoration(
               counterText: '',
@@ -169,47 +193,69 @@ class _OtpScreenState extends State<OtpScreen> with TickerProviderStateMixin {
       backgroundColor: _bgLight,
       body: AnnotatedRegion<SystemUiOverlayStyle>(
         value: SystemUiOverlayStyle.dark,
-        child: Stack(children: [
-          Positioned.fill(child: CustomPaint(painter: _DotGridPainter())),
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 28),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const SizedBox(height: 16),
-                IconButton(
-                  padding: EdgeInsets.zero,
-                  alignment: Alignment.centerLeft,
-                  icon: const Icon(Icons.arrow_back, color: _ink),
-                  onPressed: () => Navigator.pop(context),
-                ),
-                const SizedBox(height: 24),
-                AnimatedSwitcher(
-                  duration: const Duration(milliseconds: 320),
-                  child: _success ? _successView() : _entryView(),
-                ),
-                const Spacer(),
-                if (!_success)
-                  Center(
-                    child: Wrap(
-                      crossAxisAlignment: WrapCrossAlignment.center,
+        child: Stack(
+          children: [
+            Positioned.fill(child: CustomPaint(painter: _DotGridPainter())),
+            SafeArea(
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 480),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 28),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        TextButton(
-                          onPressed: () {},
-                          child: const Text('Resend code', style: TextStyle(color: _ink, fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 16),
+                        IconButton(
+                          padding: EdgeInsets.zero,
+                          alignment: Alignment.centerLeft,
+                          icon: const Icon(Icons.arrow_back, color: _ink),
+                          onPressed: () => Navigator.pop(context),
                         ),
-                        Container(width: 1, height: 14, color: _border),
-                        TextButton(
-                          onPressed: () {},
-                          child: const Text('Call instead', style: TextStyle(color: _ink, fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 24),
+                        AnimatedSwitcher(
+                          duration: const Duration(milliseconds: 320),
+                          child: _success ? _successView() : _entryView(),
                         ),
+                        const Spacer(),
+                        if (!_success)
+                          Center(
+                            child: Wrap(
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                TextButton(
+                                  onPressed: () {},
+                                  child: const Text(
+                                    'Resend code',
+                                    style: TextStyle(
+                                      color: _ink,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                                Container(width: 1, height: 14, color: _border),
+                                TextButton(
+                                  onPressed: () {},
+                                  child: const Text(
+                                    'Call instead',
+                                    style: TextStyle(
+                                      color: _ink,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        const SizedBox(height: 16),
                       ],
                     ),
                   ),
-                const SizedBox(height: 16),
-              ]),
+                ),
+              ),
             ),
-          ),
-        ]),
+          ],
+        ),
       ),
     );
   }
@@ -220,7 +266,10 @@ class _OtpScreenState extends State<OtpScreen> with TickerProviderStateMixin {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         ScaleTransition(
-          scale: CurvedAnimation(parent: _successAnim, curve: Curves.easeOutBack),
+          scale: CurvedAnimation(
+            parent: _successAnim,
+            curve: Curves.easeOutBack,
+          ),
           child: Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
@@ -228,13 +277,22 @@ class _OtpScreenState extends State<OtpScreen> with TickerProviderStateMixin {
               shape: BoxShape.circle,
               border: Border.all(color: WAColors.brand.withValues(alpha: 0.3)),
             ),
-            child: const Icon(Icons.check_rounded, color: WAColors.brandDark, size: 28),
+            child: const Icon(
+              Icons.check_rounded,
+              color: WAColors.brandDark,
+              size: 28,
+            ),
           ),
         ),
         const SizedBox(height: 18),
         const Text(
           'Verified.',
-          style: TextStyle(color: _ink, fontSize: 32, fontWeight: FontWeight.w700, letterSpacing: -0.5),
+          style: TextStyle(
+            color: _ink,
+            fontSize: 32,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.5,
+          ),
         ),
         const SizedBox(height: 6),
         const Text(
@@ -252,15 +310,29 @@ class _OtpScreenState extends State<OtpScreen> with TickerProviderStateMixin {
       children: [
         const Text(
           'Verify your number',
-          style: TextStyle(color: _ink, fontSize: 28, fontWeight: FontWeight.w700, letterSpacing: -0.5, height: 1.1),
+          style: TextStyle(
+            color: _ink,
+            fontSize: 28,
+            fontWeight: FontWeight.w700,
+            letterSpacing: -0.5,
+            height: 1.1,
+          ),
         ),
         const SizedBox(height: 10),
         Text.rich(
-          TextSpan(children: [
-            const TextSpan(text: 'A 4-digit code was sent to '),
-            TextSpan(text: widget.phone, style: const TextStyle(color: _ink, fontWeight: FontWeight.w600)),
-            const TextSpan(text: '.'),
-          ]),
+          TextSpan(
+            children: [
+              const TextSpan(text: 'A 4-digit code was sent to '),
+              TextSpan(
+                text: widget.phone,
+                style: const TextStyle(
+                  color: _ink,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const TextSpan(text: '.'),
+            ],
+          ),
           style: const TextStyle(color: _inkMuted, fontSize: 14.5, height: 1.5),
         ),
         const SizedBox(height: 32),
@@ -272,21 +344,44 @@ class _OtpScreenState extends State<OtpScreen> with TickerProviderStateMixin {
         AnimatedSwitcher(
           duration: const Duration(milliseconds: 220),
           child: _verifying
-              ? Row(key: const ValueKey('v'), children: const [
-                  SizedBox(
-                    width: 13, height: 13,
-                    child: CircularProgressIndicator(strokeWidth: 1.6, color: WAColors.brandDark),
-                  ),
-                  SizedBox(width: 8),
-                  Text('Verifying', style: TextStyle(color: _inkMuted, fontSize: 13)),
-                ])
+              ? Row(
+                  key: const ValueKey('v'),
+                  children: const [
+                    SizedBox(
+                      width: 13,
+                      height: 13,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 1.6,
+                        color: WAColors.brandDark,
+                      ),
+                    ),
+                    SizedBox(width: 8),
+                    Text(
+                      'Verifying',
+                      style: TextStyle(color: _inkMuted, fontSize: 13),
+                    ),
+                  ],
+                )
               : _err != null
-                  ? Row(key: const ValueKey('er'), children: [
-                      const Icon(Icons.error_outline, size: 14, color: Color(0xFFB42318)),
-                      const SizedBox(width: 6),
-                      Text(_err!, style: const TextStyle(color: Color(0xFFB42318), fontSize: 12.5)),
-                    ])
-                  : const SizedBox(key: ValueKey('n'), height: 14),
+              ? Row(
+                  key: const ValueKey('er'),
+                  children: [
+                    const Icon(
+                      Icons.error_outline,
+                      size: 14,
+                      color: Color(0xFFB42318),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      _err!,
+                      style: const TextStyle(
+                        color: Color(0xFFB42318),
+                        fontSize: 12.5,
+                      ),
+                    ),
+                  ],
+                )
+              : const SizedBox(key: ValueKey('n'), height: 14),
         ),
         const SizedBox(height: 28),
         Container(
@@ -296,12 +391,25 @@ class _OtpScreenState extends State<OtpScreen> with TickerProviderStateMixin {
             borderRadius: BorderRadius.circular(8),
             border: Border.all(color: const Color(0xFFE9D88E)),
           ),
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            const Icon(Icons.info_outline, size: 14, color: Color(0xFF7A5E00)),
-            const SizedBox(width: 6),
-            Text('Demo: use code 1234',
-                style: TextStyle(color: const Color(0xFF7A5E00).withValues(alpha: 0.95), fontSize: 12, fontWeight: FontWeight.w500)),
-          ]),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.info_outline,
+                size: 14,
+                color: Color(0xFF7A5E00),
+              ),
+              const SizedBox(width: 6),
+              Text(
+                'Demo: use code 1234',
+                style: TextStyle(
+                  color: const Color(0xFF7A5E00).withValues(alpha: 0.95),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
         ),
       ],
     );

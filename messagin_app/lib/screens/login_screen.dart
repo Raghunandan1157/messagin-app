@@ -36,7 +36,8 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin {
+class _LoginScreenState extends State<LoginScreen>
+    with TickerProviderStateMixin {
   _Country _country = _countries.first;
   final _phone = TextEditingController();
   final _focus = FocusNode();
@@ -48,8 +49,14 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
   @override
   void initState() {
     super.initState();
-    _enter = AnimationController(vsync: this, duration: const Duration(milliseconds: 600))..forward();
-    _typePulse = AnimationController(vsync: this, duration: const Duration(milliseconds: 240));
+    _enter = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 600),
+    )..forward();
+    _typePulse = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 240),
+    );
     _phone.addListener(_onTextChanged);
     _focus.addListener(() => setState(() {}));
     _restoreLastUsed();
@@ -103,44 +110,86 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
     final picked = await showModalBottomSheet<_Country>(
       context: context,
       backgroundColor: _bgLight,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (_) => SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 12),
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Container(
-              width: 36, height: 4,
-              decoration: BoxDecoration(color: _border, borderRadius: BorderRadius.circular(2)),
-            ),
-            const SizedBox(height: 16),
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 24),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text('Country', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: _inkMuted, letterSpacing: 1.2)),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 36,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: _border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
               ),
-            ),
-            const SizedBox(height: 8),
-            Flexible(
-              child: ListView(
-                shrinkWrap: true,
-                children: _countries
-                    .map((c) => InkWell(
+              const SizedBox(height: 16),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 24),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'Country',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: _inkMuted,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Flexible(
+                child: ListView(
+                  shrinkWrap: true,
+                  children: _countries
+                      .map(
+                        (c) => InkWell(
                           onTap: () => Navigator.pop(context, c),
                           child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
-                            child: Row(children: [
-                              Text(c.flag, style: const TextStyle(fontSize: 22)),
-                              const SizedBox(width: 14),
-                              Expanded(child: Text(c.name, style: const TextStyle(color: _ink, fontSize: 15))),
-                              Text(c.code, style: const TextStyle(color: _inkMuted, fontSize: 14, fontWeight: FontWeight.w500)),
-                            ]),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 14,
+                            ),
+                            child: Row(
+                              children: [
+                                Text(
+                                  c.flag,
+                                  style: const TextStyle(fontSize: 22),
+                                ),
+                                const SizedBox(width: 14),
+                                Expanded(
+                                  child: Text(
+                                    c.name,
+                                    style: const TextStyle(
+                                      color: _ink,
+                                      fontSize: 15,
+                                    ),
+                                  ),
+                                ),
+                                Text(
+                                  c.code,
+                                  style: const TextStyle(
+                                    color: _inkMuted,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ))
-                    .toList(),
+                        ),
+                      )
+                      .toList(),
+                ),
               ),
-            ),
-          ]),
+            ],
+          ),
         ),
       ),
     );
@@ -165,13 +214,20 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
       context,
       PageRouteBuilder(
         transitionDuration: const Duration(milliseconds: 320),
-        pageBuilder: (_, anim, _) => OtpScreen(phone: fullPhone, country: _country.name),
+        pageBuilder: (_, anim, _) =>
+            OtpScreen(phone: fullPhone, country: _country.name),
         transitionsBuilder: (_, anim, _, child) {
-          final curved = CurvedAnimation(parent: anim, curve: Curves.easeOutCubic);
+          final curved = CurvedAnimation(
+            parent: anim,
+            curve: Curves.easeOutCubic,
+          );
           return FadeTransition(
             opacity: curved,
             child: SlideTransition(
-              position: Tween<Offset>(begin: const Offset(0, 0.04), end: Offset.zero).animate(curved),
+              position: Tween<Offset>(
+                begin: const Offset(0, 0.04),
+                end: Offset.zero,
+              ).animate(curved),
               child: child,
             ),
           );
@@ -190,94 +246,166 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
           statusBarColor: Colors.transparent,
           statusBarIconBrightness: Brightness.dark,
         ),
-        child: Stack(children: [
-          // Subtle dot grid backdrop
-          Positioned.fill(child: CustomPaint(painter: _DotGridPainter())),
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 28),
-              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const SizedBox(height: 28),
-                // wordmark
-                Row(children: [
-                  Container(
-                    width: 32, height: 32,
-                    decoration: BoxDecoration(
-                      color: WAColors.brandDark,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: const Icon(Icons.all_inclusive, color: Colors.white, size: 18),
-                  ),
-                  const SizedBox(width: 10),
-                  const Text(
-                    'Messagin',
-                    style: TextStyle(color: _ink, fontSize: 17, fontWeight: FontWeight.w600, letterSpacing: -0.2),
-                  ),
-                ]),
-                const Spacer(),
-                FadeTransition(
-                  opacity: _enter,
-                  child: SlideTransition(
-                    position: Tween<Offset>(begin: const Offset(0, 0.06), end: Offset.zero)
-                        .animate(CurvedAnimation(parent: _enter, curve: Curves.easeOutCubic)),
-                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                      const Text(
-                        'Sign in',
-                        style: TextStyle(color: _ink, fontSize: 32, fontWeight: FontWeight.w700, letterSpacing: -0.8, height: 1.1),
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        'Enter your work number to access the company directory and team conversations.',
-                        style: const TextStyle(color: _inkMuted, fontSize: 15, height: 1.5),
-                      ),
-                      const SizedBox(height: 36),
-                      const Text(
-                        'PHONE NUMBER',
-                        style: TextStyle(color: _inkMuted, fontSize: 11, fontWeight: FontWeight.w600, letterSpacing: 1.4),
-                      ),
-                      const SizedBox(height: 10),
-                      _phoneField(),
-                      const SizedBox(height: 12),
-                      AnimatedSwitcher(
-                        duration: const Duration(milliseconds: 200),
-                        child: _err != null
-                            ? Padding(
-                                key: const ValueKey('err'),
-                                padding: const EdgeInsets.only(top: 4),
-                                child: Row(children: [
-                                  const Icon(Icons.error_outline, color: Color(0xFFB42318), size: 14),
-                                  const SizedBox(width: 6),
-                                  Text(_err!, style: const TextStyle(color: Color(0xFFB42318), fontSize: 12.5)),
-                                ]),
-                              )
-                            : const SizedBox.shrink(),
-                      ),
-                      const SizedBox(height: 28),
-                      _continueButton(canContinue),
-                    ]),
-                  ),
-                ),
-                const Spacer(flex: 2),
-                FadeTransition(
-                  opacity: _enter,
+        child: Stack(
+          children: [
+            // Subtle dot grid backdrop
+            Positioned.fill(child: CustomPaint(painter: _DotGridPainter())),
+            SafeArea(
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 520),
                   child: Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Row(children: [
-                      const Icon(Icons.shield_outlined, size: 14, color: _inkMuted),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          'Your number is verified through a one-time SMS. All conversations are end-to-end encrypted.',
-                          style: TextStyle(color: _inkMuted.withValues(alpha: 0.85), fontSize: 11.5, height: 1.4),
+                    padding: const EdgeInsets.symmetric(horizontal: 28),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 28),
+                        // wordmark
+                        Row(
+                          children: [
+                            Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: WAColors.brandDark,
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(
+                                Icons.all_inclusive,
+                                color: Colors.white,
+                                size: 18,
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            const Text(
+                              'Messagin',
+                              style: TextStyle(
+                                color: _ink,
+                                fontSize: 17,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: -0.2,
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                    ]),
+                        const Spacer(),
+                        FadeTransition(
+                          opacity: _enter,
+                          child: SlideTransition(
+                            position:
+                                Tween<Offset>(
+                                  begin: const Offset(0, 0.06),
+                                  end: Offset.zero,
+                                ).animate(
+                                  CurvedAnimation(
+                                    parent: _enter,
+                                    curve: Curves.easeOutCubic,
+                                  ),
+                                ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Sign in',
+                                  style: TextStyle(
+                                    color: _ink,
+                                    fontSize: 32,
+                                    fontWeight: FontWeight.w700,
+                                    letterSpacing: -0.8,
+                                    height: 1.1,
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                Text(
+                                  'Enter your work number to access the company directory and team conversations.',
+                                  style: const TextStyle(
+                                    color: _inkMuted,
+                                    fontSize: 15,
+                                    height: 1.5,
+                                  ),
+                                ),
+                                const SizedBox(height: 36),
+                                const Text(
+                                  'PHONE NUMBER',
+                                  style: TextStyle(
+                                    color: _inkMuted,
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    letterSpacing: 1.4,
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                _phoneField(),
+                                const SizedBox(height: 12),
+                                AnimatedSwitcher(
+                                  duration: const Duration(milliseconds: 200),
+                                  child: _err != null
+                                      ? Padding(
+                                          key: const ValueKey('err'),
+                                          padding: const EdgeInsets.only(
+                                            top: 4,
+                                          ),
+                                          child: Row(
+                                            children: [
+                                              const Icon(
+                                                Icons.error_outline,
+                                                color: Color(0xFFB42318),
+                                                size: 14,
+                                              ),
+                                              const SizedBox(width: 6),
+                                              Text(
+                                                _err!,
+                                                style: const TextStyle(
+                                                  color: Color(0xFFB42318),
+                                                  fontSize: 12.5,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        )
+                                      : const SizedBox.shrink(),
+                                ),
+                                const SizedBox(height: 28),
+                                _continueButton(canContinue),
+                              ],
+                            ),
+                          ),
+                        ),
+                        const Spacer(flex: 2),
+                        FadeTransition(
+                          opacity: _enter,
+                          child: Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Row(
+                              children: [
+                                const Icon(
+                                  Icons.shield_outlined,
+                                  size: 14,
+                                  color: _inkMuted,
+                                ),
+                                const SizedBox(width: 6),
+                                Expanded(
+                                  child: Text(
+                                    'Your number is verified through a one-time SMS. All conversations are end-to-end encrypted.',
+                                    style: TextStyle(
+                                      color: _inkMuted.withValues(alpha: 0.85),
+                                      fontSize: 11.5,
+                                      height: 1.4,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-              ]),
+              ),
             ),
-          ),
-        ]),
+          ],
+        ),
       ),
     );
   }
@@ -295,71 +423,95 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: borderColor,
-              width: focused ? 1.6 : 1,
-            ),
+            border: Border.all(color: borderColor, width: focused ? 1.6 : 1),
             boxShadow: focused
                 ? [
                     BoxShadow(
-                      color: WAColors.brand.withValues(alpha: 0.08 + 0.10 * pulse),
+                      color: WAColors.brand.withValues(
+                        alpha: 0.08 + 0.10 * pulse,
+                      ),
                       blurRadius: 16,
                       spreadRadius: 2,
                     ),
                   ]
                 : null,
           ),
-          child: Row(children: [
-            InkWell(
-              onTap: _pickCountry,
-              borderRadius: const BorderRadius.horizontal(left: Radius.circular(12)),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
-                child: Row(children: [
-                  Text(_country.flag, style: const TextStyle(fontSize: 18)),
-                  const SizedBox(width: 8),
-                  Text(_country.code,
-                      style: const TextStyle(color: _ink, fontSize: 15, fontWeight: FontWeight.w600)),
-                  const SizedBox(width: 2),
-                  const Icon(Icons.expand_more, size: 18, color: _inkMuted),
-                ]),
-              ),
-            ),
-            Container(width: 1, height: 24, color: _border),
-            Expanded(
-              child: TextField(
-                controller: _phone,
-                focusNode: _focus,
-                keyboardType: TextInputType.phone,
-                inputFormatters: [
-                  FilteringTextInputFormatter.digitsOnly,
-                  LengthLimitingTextInputFormatter(15),
-                ],
-                style: const TextStyle(color: _ink, fontSize: 16, letterSpacing: 0.5, fontWeight: FontWeight.w500),
-                cursorColor: WAColors.brandDark,
-                decoration: const InputDecoration(
-                  hintText: 'Phone number',
-                  hintStyle: TextStyle(color: _inkMuted, fontSize: 15),
-                  border: InputBorder.none,
-                  isCollapsed: true,
-                  contentPadding: EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+          child: Row(
+            children: [
+              InkWell(
+                onTap: _pickCountry,
+                borderRadius: const BorderRadius.horizontal(
+                  left: Radius.circular(12),
                 ),
-                onSubmitted: (_) => _continue(),
-              ),
-            ),
-            // Char count indicator
-            if (_phone.text.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(right: 12),
-                child: Text(
-                  '${_phone.text.length}',
-                  style: const TextStyle(
-                    color: _inkMuted, fontSize: 11.5, fontFeatures: [FontFeature.tabularFigures()],
-                    fontWeight: FontWeight.w600,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 16,
+                  ),
+                  child: Row(
+                    children: [
+                      Text(_country.flag, style: const TextStyle(fontSize: 18)),
+                      const SizedBox(width: 8),
+                      Text(
+                        _country.code,
+                        style: const TextStyle(
+                          color: _ink,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(width: 2),
+                      const Icon(Icons.expand_more, size: 18, color: _inkMuted),
+                    ],
                   ),
                 ),
               ),
-          ]),
+              Container(width: 1, height: 24, color: _border),
+              Expanded(
+                child: TextField(
+                  controller: _phone,
+                  focusNode: _focus,
+                  keyboardType: TextInputType.phone,
+                  inputFormatters: [
+                    FilteringTextInputFormatter.digitsOnly,
+                    LengthLimitingTextInputFormatter(15),
+                  ],
+                  style: const TextStyle(
+                    color: _ink,
+                    fontSize: 16,
+                    letterSpacing: 0.5,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  cursorColor: WAColors.brandDark,
+                  decoration: const InputDecoration(
+                    hintText: 'Phone number',
+                    hintStyle: TextStyle(color: _inkMuted, fontSize: 15),
+                    border: InputBorder.none,
+                    isCollapsed: true,
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 16,
+                    ),
+                  ),
+                  onSubmitted: (_) => _continue(),
+                ),
+              ),
+              // Char count indicator
+              if (_phone.text.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(right: 12),
+                  child: Text(
+                    '${_phone.text.length}',
+                    style: const TextStyle(
+                      color: _inkMuted,
+                      fontSize: 11.5,
+                      fontFeatures: [FontFeature.tabularFigures()],
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+            ],
+          ),
         );
       },
     );
@@ -377,7 +529,13 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
           color: enabled ? _ink : const Color(0xFFB8B5AE),
           borderRadius: BorderRadius.circular(12),
           boxShadow: enabled
-              ? [BoxShadow(color: _ink.withValues(alpha: 0.18), blurRadius: 18, offset: const Offset(0, 6))]
+              ? [
+                  BoxShadow(
+                    color: _ink.withValues(alpha: 0.18),
+                    blurRadius: 18,
+                    offset: const Offset(0, 6),
+                  ),
+                ]
               : null,
         ),
         child: Material(
@@ -386,12 +544,26 @@ class _LoginScreenState extends State<LoginScreen> with TickerProviderStateMixin
             borderRadius: BorderRadius.circular(12),
             onTap: enabled ? _continue : null,
             child: const Center(
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Text('Continue',
-                    style: TextStyle(color: Colors.white, fontSize: 15.5, fontWeight: FontWeight.w600, letterSpacing: 0.2)),
-                SizedBox(width: 8),
-                Icon(Icons.arrow_forward_rounded, color: Colors.white, size: 18),
-              ]),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Continue',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 15.5,
+                      fontWeight: FontWeight.w600,
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                  SizedBox(width: 8),
+                  Icon(
+                    Icons.arrow_forward_rounded,
+                    color: Colors.white,
+                    size: 18,
+                  ),
+                ],
+              ),
             ),
           ),
         ),

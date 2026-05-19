@@ -1,11 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io' show File, Platform;
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:http/http.dart' as http;
 import 'package:web_socket_channel/web_socket_channel.dart';
+
+import 'signal_endpoint.dart';
 
 /// Typed signaling message envelope. Matches the wire format implemented by
 /// `server/signal.js` (the protocol perf-debugger built for task #6 — itself
@@ -16,6 +15,7 @@ import 'package:web_socket_channel/web_socket_channel.dart';
 /// each peerId represents.
 class SignalMessage {
   final String type;
+
   /// On `welcome` / `room-joined`: our own peerId.
   /// On `peer-joined` / `peer-left` / forwarded offer/answer/ice-candidate:
   /// the originator's peerId.
@@ -48,10 +48,12 @@ class SignalMessage {
     if (rawPeers is List) {
       for (final p in rawPeers) {
         if (p is Map) {
-          peers.add(RoomPeer(
-            peerId: p['peerId'] as String? ?? '',
-            userId: p['userId'] as String?,
-          ));
+          peers.add(
+            RoomPeer(
+              peerId: p['peerId'] as String? ?? '',
+              userId: p['userId'] as String?,
+            ),
+          );
         }
       }
     }
@@ -98,6 +100,7 @@ class SignalingClient {
   int _retryAttempt = 0;
   Timer? _reconnectTimer;
   Timer? _heartbeat;
+  Future<void>? _connectFuture;
 
   SignalingClient(this.userId);
 
@@ -105,53 +108,47 @@ class SignalingClient {
   ValueListenable<bool> get connected => _connected;
   ValueListenable<String?> get selfPeerId => _selfPeerId;
 
-  Future<String> _resolveUrl() async {
+  Future<String?> _resolveUrl() async {
     // 1. Native: prefer the ngrok override file the signaling-server task writes.
     if (!kIsWeb) {
-      try {
-        final home = Platform.environment['HOME'] ??
-            Platform.environment['USERPROFILE'];
-        if (home != null) {
-          final f = File('$home/.messagin-signal.json');
-          if (await f.exists()) {
-            final j = jsonDecode(await f.readAsString());
-            final wss = (j is Map ? j['wss'] : null) as String?;
-            if (wss != null && wss.isNotEmpty) return wss;
-          }
-        }
-      } catch (e) {
-        debugPrint('signal-url file read failed: $e');
-      }
+      final wss = await localOverrideWss();
+      if (wss != null && wss.isNotEmpty) return wss;
     }
-    // 2. Web (or native fallback): ask the Vercel proxy. The `call` shortcut
-    // publishes the latest ngrok WSS to /api/signal-url.
+    // 2. Web (or native fallback): ask the Vercel proxy. Relative
+    // API_ENDPOINT values like `/api/sql` resolve against the deployed origin.
     try {
-      final apiBase = dotenv.env['API_ENDPOINT']
-              ?.replaceFirst(RegExp(r'/api/sql$'), '') ??
-          '';
-      if (apiBase.isNotEmpty) {
-        final resp = await http
-            .get(Uri.parse('$apiBase/api/signal-url'))
-            .timeout(const Duration(seconds: 4));
-        if (resp.statusCode == 200) {
-          final j = jsonDecode(resp.body) as Map<String, dynamic>;
-          final wss = j['wss'] as String?;
-          if (wss != null && wss.isNotEmpty) return wss;
-        }
-      }
+      final wss = await publishedSignalWss();
+      if (wss != null && wss.isNotEmpty) return wss;
     } catch (e) {
       debugPrint('signal-url remote fetch failed: $e');
     }
-    // 3. Final fallback to env / localhost.
-    final fromEnv = dotenv.env['SIGNAL_WSS_URL'];
-    return fromEnv != null && fromEnv.isNotEmpty
-        ? fromEnv
-        : 'ws://localhost:8787';
+    // 3. Explicit env override, then native localhost fallback. Web should not
+    // try localhost from HTTPS unless SIGNAL_WSS_URL deliberately says so.
+    final fromEnv = configuredSignalWss();
+    if (fromEnv != null) return fromEnv;
+    return kIsWeb ? null : 'ws://localhost:8787';
   }
 
   Future<void> connect() async {
+    if (_closed || _connected.value) return;
+    final pending = _connectFuture;
+    if (pending != null) return pending;
+    _connectFuture = _connect();
+    try {
+      await _connectFuture;
+    } finally {
+      _connectFuture = null;
+    }
+  }
+
+  Future<void> _connect() async {
     if (_closed) return;
     final url = await _resolveUrl();
+    if (url == null || url.isEmpty) {
+      debugPrint('signal connect skipped: no signal URL available');
+      _scheduleReconnect();
+      return;
+    }
     try {
       final uri = Uri.parse(url);
       _ch = WebSocketChannel.connect(uri);
@@ -164,8 +161,9 @@ class SignalingClient {
           try {
             final decoded = jsonDecode(data as String);
             if (decoded is Map) {
-              final msg =
-                  SignalMessage.fromJson(Map<String, dynamic>.from(decoded));
+              final msg = SignalMessage.fromJson(
+                Map<String, dynamic>.from(decoded),
+              );
               // Capture our server-assigned peerId from `welcome`.
               if (msg.type == 'welcome' && msg.peerId != null) {
                 _selfPeerId.value = msg.peerId;
