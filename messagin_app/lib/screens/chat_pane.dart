@@ -36,6 +36,7 @@ class ChatPane extends StatefulWidget {
 class _ChatPaneState extends State<ChatPane> {
   final _input = TextEditingController();
   final _scroll = ScrollController();
+  final _listKey = GlobalKey<AnimatedListState>();
   List<Message> _messages = [];
   Map<String, List<Reaction>> _reactionsByMsg = {};
   bool _loading = true;
@@ -79,18 +80,43 @@ class _ChatPaneState extends State<ChatPane> {
   Future<void> _load() async {
     final repo = context.read<AppState>().repo;
     try {
-      // Run messages + reactions in parallel (single Neon connection
-      // pipelines them ~back-to-back instead of full RTT each).
       final results = await Future.wait([
         repo.listMessages(widget.chat.id),
         repo.reactionsForChat(widget.chat.id),
       ]);
       if (!mounted) return;
-      setState(() {
-        _messages = results[0] as List<Message>;
-        _reactionsByMsg = _groupReactions(results[1] as List<Reaction>);
-        _loading = false;
-      });
+      final loaded = results[0] as List<Message>;
+      final reactions = _groupReactions(results[1] as List<Reaction>);
+
+      if (loaded.isNotEmpty) {
+        setState(() {
+          _messages = [];
+          _reactionsByMsg = reactions;
+          _loading = false;
+        });
+        for (final m in loaded) {
+          final isVisible = m.kind == 'text';
+          if (isVisible) {
+            await Future.delayed(const Duration(milliseconds: 30));
+            if (!mounted) return;
+          }
+          setState(() => _messages.add(m));
+          if (isVisible) {
+            final visibleCount =
+                _messages.where((x) => x.kind == 'text').length;
+            _listKey.currentState?.insertItem(
+              visibleCount,
+              duration: const Duration(milliseconds: 300),
+            );
+          }
+        }
+      } else {
+        setState(() {
+          _messages = loaded;
+          _reactionsByMsg = reactions;
+          _loading = false;
+        });
+      }
       _scrollToBottom();
     } catch (e) {
       if (!mounted) return;
@@ -107,7 +133,7 @@ class _ChatPaneState extends State<ChatPane> {
   }
 
   Future<void> _pollNew() async {
-    if (_polling) return; // single-flight: drop overlapping polls
+    if (_polling) return;
     _polling = true;
     final repo = context.read<AppState>().repo;
     try {
@@ -119,7 +145,18 @@ class _ChatPaneState extends State<ChatPane> {
         final seen = _messages.map((m) => m.id).toSet();
         final novel = fresh.where((m) => !seen.contains(m.id)).toList();
         if (novel.isNotEmpty && mounted) {
-          setState(() => _messages.addAll(novel));
+          for (final m in novel) {
+            final isVisible = m.kind == 'text';
+            setState(() => _messages.add(m));
+            if (isVisible) {
+              final visibleCount =
+                  _messages.where((x) => x.kind == 'text').length;
+              _listKey.currentState?.insertItem(
+                visibleCount,
+                duration: const Duration(milliseconds: 300),
+              );
+            }
+          }
           _scrollToBottom();
         }
       } else {
@@ -152,7 +189,6 @@ class _ChatPaneState extends State<ChatPane> {
     final state = context.read<AppState>();
     final me = state.me!;
 
-    // Optimistic: render the message immediately so the UI feels instant.
     final tempId = 'local-${_uuid.v4()}';
     final temp = Message(
       id: tempId,
@@ -168,6 +204,11 @@ class _ChatPaneState extends State<ChatPane> {
       _hasText = false;
       _sending = true;
     });
+    final visibleCount = _messages.where((m) => m.kind == 'text').length;
+    _listKey.currentState?.insertItem(
+      visibleCount,
+      duration: const Duration(milliseconds: 300),
+    );
     _scrollToBottom();
 
     try {
@@ -179,10 +220,29 @@ class _ChatPaneState extends State<ChatPane> {
           _messages[i] = m;
         } else {
           _messages.add(m);
+          final newVisibleCount =
+              _messages.where((x) => x.kind == 'text').length;
+          _listKey.currentState?.insertItem(
+            newVisibleCount,
+            duration: const Duration(milliseconds: 300),
+          );
         }
       });
     } catch (e) {
       if (!mounted) return;
+      final visible = _messages.where((m) => m.kind == 'text').toList();
+      final removeIndex = visible.indexWhere((x) => x.id == tempId);
+      if (removeIndex >= 0) {
+        _listKey.currentState?.removeItem(
+          removeIndex + 1,
+          (context, animation) => _buildRemoveAnimation(
+            _buildRemovedMessage(context, temp, me),
+            animation,
+            true,
+          ),
+          duration: const Duration(milliseconds: 250),
+        );
+      }
       setState(() => _messages.removeWhere((x) => x.id == tempId));
       ScaffoldMessenger.of(
         context,
@@ -204,7 +264,6 @@ class _ChatPaneState extends State<ChatPane> {
     try {
       ctrl = context.read<CallController>();
     } catch (_) {
-      // CallController not yet injected (no signed-in user / signaling not up).
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
           content: Text('Calls unavailable — signaling not ready.'),
@@ -213,8 +272,6 @@ class _ChatPaneState extends State<ChatPane> {
       return;
     }
 
-    // 1. Join the signaling room first. If the relay is down, don't write a
-    // call invite that would ring the peer into a dead call.
     final started = await ctrl.start(
       chatId: widget.chat.id,
       peerUserId: peer.id,
@@ -230,8 +287,6 @@ class _ChatPaneState extends State<ChatPane> {
       return;
     }
 
-    // 2. Write a `call_invite` control message into Neon so the callee's
-    //    CallInviteWatcher picks it up on its next poll and rings them.
     final inviteExpiry = DateTime.now()
         .toUtc()
         .add(const Duration(seconds: 45))
@@ -246,25 +301,19 @@ class _ChatPaneState extends State<ChatPane> {
       );
     } catch (e) {
       debugPrint('call_invite write failed: $e');
-      // Fall through; caller-side call still works if peer is already in room.
     }
     if (!mounted) return;
 
-    // 3. 45s timeout: if call never connects, write a call_reject(no_answer)
-    //    so the invite stops haunting the chat and end the local call.
     final callId = widget.chat.id;
     final repo = state.repo;
     final selfId = me.id;
     final localCtrl = ctrl;
     Timer(const Duration(seconds: 45), () {
-      // Only fire if we're still trying — already connected? Already torn
-      // down? Skip.
       if (localCtrl.state == CallState.active ||
           localCtrl.state == CallState.idle ||
           localCtrl.state == CallState.ended) {
         return;
       }
-      // ignore: unawaited_futures
       repo
           .sendControlMessage(
             callId,
@@ -345,13 +394,86 @@ class _ChatPaneState extends State<ChatPane> {
     return '${local.day}/${local.month}/${local.year}';
   }
 
+  Widget _buildInsertAnimation(Widget child, Animation<double> animation) {
+    final curved = CurvedAnimation(parent: animation, curve: Curves.elasticOut);
+    return FadeTransition(
+      opacity: curved,
+      child: SlideTransition(
+        position: Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero)
+            .animate(curved),
+        child: ScaleTransition(
+          scale: Tween<double>(begin: 0.9, end: 1.0).animate(curved),
+          child: child,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRemoveAnimation(
+      Widget child, Animation<double> animation, bool isMine) {
+    final curved = CurvedAnimation(parent: animation, curve: Curves.easeIn);
+    return FadeTransition(
+      opacity: Tween<double>(begin: 1.0, end: 0.0).animate(curved),
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: Offset.zero,
+          end: isMine ? const Offset(1.5, 0) : const Offset(-1.5, 0),
+        ).animate(curved),
+        child: child,
+      ),
+    );
+  }
+
+  Widget _buildRemovedMessage(BuildContext context, Message m, AppUser me) {
+    final memberById = {
+      for (final member in widget.chat.members) member.id: member
+    };
+    final isMine = m.senderId == me.id;
+    final rs = _reactionsByMsg[m.id] ?? const [];
+    return MessageBubble(
+      message: m,
+      isMine: isMine,
+      showSenderName: false,
+      senderName: memberById[m.senderId]?.name,
+      reactions: rs,
+      showTail: false,
+      onLongPress: (_) {},
+    );
+  }
+
+  Widget _buildEncryptionBanner() {
+    return Center(
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFF3C4),
+          borderRadius: BorderRadius.circular(8),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.08),
+              blurRadius: 1,
+            ),
+          ],
+        ),
+        child: const Text(
+          'Messages are end-to-end encrypted. No one outside of this chat, not even Messagin app, can read or listen to them.',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 12,
+            color: Color(0xFF54656F),
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final me = context.watch<AppState>().me!;
     final memberById = {for (final m in widget.chat.members) m.id: m};
     final body = Column(
       children: [
-        // header
         Container(
           height: 60,
           color: WAColors.panelLight,
@@ -454,49 +576,20 @@ class _ChatPaneState extends State<ChatPane> {
                   )
                 : Builder(
                     builder: (_) {
-                      // Hide control envelopes (call_invite / call_reject) from the
-                      // user-visible message list. They drive UX, not chat content.
                       final visible = _messages
                           .where((m) => m.kind == 'text')
                           .toList();
-                      return ListView.builder(
+                      return AnimatedList(
+                        key: _listKey,
                         controller: _scroll,
                         padding: const EdgeInsets.symmetric(
                           vertical: 12,
                           horizontal: 60,
                         ),
-                        itemCount: visible.length + 1,
-                        itemBuilder: (_, i) {
+                        initialItemCount: visible.length + 1,
+                        itemBuilder: (context, i, animation) {
                           if (i == 0) {
-                            return Center(
-                              child: Container(
-                                margin: const EdgeInsets.only(bottom: 12),
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 14,
-                                  vertical: 7,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFFFF3C4),
-                                  borderRadius: BorderRadius.circular(8),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withValues(
-                                        alpha: 0.08,
-                                      ),
-                                      blurRadius: 1,
-                                    ),
-                                  ],
-                                ),
-                                child: const Text(
-                                  'Messages are end-to-end encrypted. No one outside of this chat, not even Messagin app, can read or listen to them.',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: Color(0xFF54656F),
-                                  ),
-                                ),
-                              ),
-                            );
+                            return _buildEncryptionBanner();
                           }
                           final idx = i - 1;
                           final m = visible[idx];
@@ -512,44 +605,67 @@ class _ChatPaneState extends State<ChatPane> {
                               _dateLabel(prev.createdAt) !=
                                   _dateLabel(m.createdAt);
                           final rs = _reactionsByMsg[m.id] ?? const [];
-                          return Column(
-                            children: [
-                              if (showDate)
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    vertical: 10,
-                                  ),
-                                  child: Center(
-                                    child: Container(
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 6,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: WAColors.dateChipLight,
-                                        borderRadius: BorderRadius.circular(8),
-                                      ),
-                                      child: Text(
-                                        _dateLabel(m.createdAt),
-                                        style: const TextStyle(
-                                          fontSize: 12,
-                                          color: Color(0xFF54656F),
-                                          fontWeight: FontWeight.w500,
+                          return _buildInsertAnimation(
+                            Column(
+                              children: [
+                                if (showDate)
+                                  Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      vertical: 10,
+                                    ),
+                                    child: Center(
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 12,
+                                          vertical: 6,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: WAColors.dateChipLight,
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Text(
+                                          _dateLabel(m.createdAt),
+                                          style: const TextStyle(
+                                            fontSize: 12,
+                                            color: Color(0xFF54656F),
+                                            fontWeight: FontWeight.w500,
+                                          ),
                                         ),
                                       ),
                                     ),
                                   ),
+                                AnimatedSwitcher(
+                                  duration: const Duration(milliseconds: 250),
+                                  transitionBuilder: (child, anim) {
+                                    final curved = CurvedAnimation(
+                                      parent: anim,
+                                      curve: Curves.easeOut,
+                                    );
+                                    return ScaleTransition(
+                                      scale: Tween<double>(
+                                        begin: 1.02,
+                                        end: 1.0,
+                                      ).animate(curved),
+                                      child: FadeTransition(
+                                        opacity: curved,
+                                        child: child,
+                                      ),
+                                    );
+                                  },
+                                  child: MessageBubble(
+                                    key: ValueKey(m.id),
+                                    message: m,
+                                    isMine: isMine,
+                                    showSenderName: showName,
+                                    senderName: memberById[m.senderId]?.name,
+                                    reactions: rs,
+                                    showTail: showTail,
+                                    onLongPress: (pos) => _onLongPress(m, pos),
+                                  ),
                                 ),
-                              MessageBubble(
-                                message: m,
-                                isMine: isMine,
-                                showSenderName: showName,
-                                senderName: memberById[m.senderId]?.name,
-                                reactions: rs,
-                                showTail: showTail,
-                                onLongPress: (pos) => _onLongPress(m, pos),
-                              ),
-                            ],
+                              ],
+                            ),
+                            animation,
                           );
                         },
                       );
@@ -604,12 +720,9 @@ class _ChatPaneState extends State<ChatPane> {
                 ),
               ),
               const SizedBox(width: 8),
-              IconButton(
-                icon: Icon(
-                  _hasText ? Icons.send : Icons.mic_none,
-                  color: WAColors.brandDark,
-                ),
-                onPressed: _hasText ? _send : () {},
+              _SendButton(
+                hasText: _hasText,
+                onSend: _send,
               ),
             ],
           ),
@@ -618,7 +731,6 @@ class _ChatPaneState extends State<ChatPane> {
       ],
     );
 
-    // Subtle fade-in on mount / chat switch (0.85 → 1.0 over 200ms).
     final faded = AnimatedSwitcher(
       duration: const Duration(milliseconds: 200),
       transitionBuilder: (child, anim) {
@@ -634,6 +746,69 @@ class _ChatPaneState extends State<ChatPane> {
       return Container(color: WAColors.chatBgLight, child: faded);
     }
     return Scaffold(body: faded);
+  }
+}
+
+class _SendButton extends StatelessWidget {
+  final bool hasText;
+  final VoidCallback onSend;
+
+  const _SendButton({required this.hasText, required this.onSend});
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedSwitcher(
+      duration: const Duration(milliseconds: 220),
+      transitionBuilder: (child, anim) {
+        final rotate = Tween<double>(begin: -0.5, end: 0.0).animate(
+          CurvedAnimation(parent: anim, curve: Curves.easeOutBack),
+        );
+        final scale = Tween<double>(begin: 0.6, end: 1.0).animate(
+          CurvedAnimation(parent: anim, curve: Curves.easeOutBack),
+        );
+        return RotationTransition(
+          turns: rotate,
+          child: ScaleTransition(
+            scale: scale,
+            child: FadeTransition(
+              opacity: anim,
+              child: child,
+            ),
+          ),
+        );
+      },
+      child: hasText
+          ? Material(
+              key: const ValueKey('send'),
+              color: WAColors.brandDark,
+              borderRadius: BorderRadius.circular(22),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(22),
+                onTap: onSend,
+                child: Container(
+                  width: 44,
+                  height: 44,
+                  alignment: Alignment.center,
+                  child: const Icon(
+                    Icons.send,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                ),
+              ),
+            )
+          : Container(
+              key: const ValueKey('mic'),
+              width: 44,
+              height: 44,
+              alignment: Alignment.center,
+              child: Icon(
+                Icons.mic_none,
+                color: WAColors.mutedLight,
+                size: 26,
+              ),
+            ),
+    );
   }
 }
 

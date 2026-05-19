@@ -13,6 +13,8 @@ class MessageBubble extends StatelessWidget {
   final bool showTail;
   final List<Reaction> reactions;
   final void Function(Offset globalPosition)? onLongPress;
+  final Animation<double>? animation;
+
   const MessageBubble({
     super.key,
     required this.message,
@@ -23,6 +25,7 @@ class MessageBubble extends StatelessWidget {
     this.showTail = true,
     this.reactions = const [],
     this.onLongPress,
+    this.animation,
   });
 
   @override
@@ -95,7 +98,7 @@ class MessageBubble extends StatelessWidget {
       ]);
     }
 
-    return Align(
+    Widget result = Align(
       alignment: isMine ? Alignment.centerRight : Alignment.centerLeft,
       child: Column(
         crossAxisAlignment: isMine ? CrossAxisAlignment.end : CrossAxisAlignment.start,
@@ -131,6 +134,31 @@ class MessageBubble extends StatelessWidget {
         ],
       ),
     );
+
+    if (animation != null) {
+      final scaleAnimation = Tween<double>(
+        begin: 0.85,
+        end: 1.0,
+      ).animate(CurvedAnimation(parent: animation!, curve: Curves.easeOutBack));
+
+      final slideAnimation = Tween<Offset>(
+        begin: isMine ? const Offset(0.3, 0.15) : const Offset(-0.3, 0.15),
+        end: Offset.zero,
+      ).animate(CurvedAnimation(parent: animation!, curve: Curves.easeOutCubic));
+
+      result = FadeTransition(
+        opacity: animation!,
+        child: ScaleTransition(
+          scale: scaleAnimation,
+          child: SlideTransition(
+            position: slideAnimation,
+            child: result,
+          ),
+        ),
+      );
+    }
+
+    return result;
   }
 
   Widget _bubbleContent(Color fg) {
@@ -207,4 +235,114 @@ class _TailPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_TailPainter old) => old.color != color || old.leftSide != leftSide;
+}
+
+/// Wraps a [MessageBubble] with an entrance animation driven by an [Animation<double>]
+/// (typically provided by an [AnimatedList]).
+///
+/// Animates:
+/// - Scale 0.85 → 1.0
+/// - Opacity 0.0 → 1.0
+/// - Translate X: ±30px → 0 (toward the edge based on [MessageBubble.isMine])
+/// - Curve: [Curves.elasticOut]
+class AnimatedMessageBubble extends StatefulWidget {
+  final MessageBubble child;
+  final Animation<double> animation;
+
+  const AnimatedMessageBubble({
+    super.key,
+    required this.child,
+    required this.animation,
+  });
+
+  @override
+  State<AnimatedMessageBubble> createState() => _AnimatedMessageBubbleState();
+}
+
+class _AnimatedMessageBubbleState extends State<AnimatedMessageBubble> {
+  late Animation<double> _curved;
+
+  @override
+  void initState() {
+    super.initState();
+    _curved = CurvedAnimation(parent: widget.animation, curve: Curves.elasticOut);
+  }
+
+  @override
+  void didUpdateWidget(covariant AnimatedMessageBubble oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.animation != widget.animation) {
+      _curved = CurvedAnimation(parent: widget.animation, curve: Curves.elasticOut);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _curved,
+      builder: (context, child) {
+        final value = _curved.value;
+        final translateX = widget.child.isMine
+            ? 30.0 * (1 - value)
+            : -30.0 * (1 - value);
+        return Opacity(
+          opacity: value.clamp(0.0, 1.0),
+          child: Transform.scale(
+            scale: 0.85 + 0.15 * value,
+            child: Transform.translate(
+              offset: Offset(translateX, 0),
+              child: child,
+            ),
+          ),
+        );
+      },
+      child: widget.child,
+    );
+  }
+}
+
+/// Convenience widget for [AnimatedList] item builder.
+///
+/// Accepts the same parameters as [MessageBubble] plus an [animation]
+/// and returns the bubble wrapped in [AnimatedMessageBubble].
+class SlideInBubble extends StatelessWidget {
+  final Animation<double> animation;
+  final Message message;
+  final bool isMine;
+  final bool showSenderName;
+  final String? senderName;
+  final bool isDark;
+  final bool showTail;
+  final List<Reaction> reactions;
+  final void Function(Offset globalPosition)? onLongPress;
+
+  const SlideInBubble({
+    super.key,
+    required this.animation,
+    required this.message,
+    required this.isMine,
+    this.showSenderName = false,
+    this.senderName,
+    this.isDark = false,
+    this.showTail = true,
+    this.reactions = const [],
+    this.onLongPress,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedMessageBubble(
+      animation: animation,
+      child: MessageBubble(
+        message: message,
+        isMine: isMine,
+        showSenderName: showSenderName,
+        senderName: senderName,
+        isDark: isDark,
+        showTail: showTail,
+        reactions: reactions,
+        onLongPress: onLongPress,
+      ),
+    );
+  }
 }
