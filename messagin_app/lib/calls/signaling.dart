@@ -1,9 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
+import 'dart:io' show File, Platform;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:http/http.dart' as http;
 import 'package:web_socket_channel/web_socket_channel.dart';
 
 /// Typed signaling message envelope. Matches the wire format implemented by
@@ -105,7 +106,7 @@ class SignalingClient {
   ValueListenable<String?> get selfPeerId => _selfPeerId;
 
   Future<String> _resolveUrl() async {
-    // 1. Prefer the ngrok override file the signaling-server task writes.
+    // 1. Native: prefer the ngrok override file the signaling-server task writes.
     if (!kIsWeb) {
       try {
         final home = Platform.environment['HOME'] ??
@@ -122,6 +123,26 @@ class SignalingClient {
         debugPrint('signal-url file read failed: $e');
       }
     }
+    // 2. Web (or native fallback): ask the Vercel proxy. The `call` shortcut
+    // publishes the latest ngrok WSS to /api/signal-url.
+    try {
+      final apiBase = dotenv.env['API_ENDPOINT']
+              ?.replaceFirst(RegExp(r'/api/sql$'), '') ??
+          '';
+      if (apiBase.isNotEmpty) {
+        final resp = await http
+            .get(Uri.parse('$apiBase/api/signal-url'))
+            .timeout(const Duration(seconds: 4));
+        if (resp.statusCode == 200) {
+          final j = jsonDecode(resp.body) as Map<String, dynamic>;
+          final wss = j['wss'] as String?;
+          if (wss != null && wss.isNotEmpty) return wss;
+        }
+      }
+    } catch (e) {
+      debugPrint('signal-url remote fetch failed: $e');
+    }
+    // 3. Final fallback to env / localhost.
     final fromEnv = dotenv.env['SIGNAL_WSS_URL'];
     return fromEnv != null && fromEnv.isNotEmpty
         ? fromEnv
