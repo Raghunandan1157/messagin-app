@@ -112,7 +112,7 @@ class AppState extends ChangeNotifier {
       }
       final uri = Uri.parse('$base/health');
       final resp = await http
-          .get(uri)
+          .get(uri, headers: const {'ngrok-skip-browser-warning': '1'})
           .timeout(const Duration(seconds: 4));
       final healthy = resp.statusCode >= 200 && resp.statusCode < 400;
       _setServerHealthy(healthy);

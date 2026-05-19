@@ -107,7 +107,7 @@ function removeFromRoom(ws) {
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Headers': 'Content-Type, ngrok-skip-browser-warning',
 };
 
 const httpServer = http.createServer((req, res) => {
