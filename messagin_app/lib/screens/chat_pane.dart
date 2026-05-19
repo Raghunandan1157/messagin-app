@@ -368,11 +368,6 @@ class _ChatPaneState extends State<ChatPane> {
         child: Container(
           decoration: const BoxDecoration(
             color: WAColors.chatBgLight,
-            image: DecorationImage(
-              image: NetworkImage('https://web.whatsapp.com/img/bg-chat-tile-light_a4be512e7195b6b733d9110b408f075d.png'),
-              repeat: ImageRepeat.repeat,
-              opacity: 0.06,
-            ),
           ),
           child: _loading
               ? ListView.builder(

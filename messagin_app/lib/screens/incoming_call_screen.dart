@@ -37,9 +37,12 @@ class _IncomingCallScreenState extends State<IncomingCallScreen> {
     // Swap this screen for the in-call screen.
     if (c.state == CallState.connecting || c.state == CallState.active) {
       Navigator.of(context).pushReplacement(MaterialPageRoute(
-        builder: (_) => CallScreen(
-          peerName: widget.caller.name,
-          peerInitials: widget.caller.initials,
+        builder: (_) => ChangeNotifierProvider<CallController>.value(
+          value: c,
+          child: CallScreen(
+            peerName: widget.caller.name,
+            peerInitials: widget.caller.initials,
+          ),
         ),
       ));
     } else if (c.state == CallState.idle || c.state == CallState.ended) {
