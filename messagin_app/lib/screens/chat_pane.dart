@@ -47,6 +47,7 @@ class _ChatPaneState extends State<ChatPane> {
   Timer? _poll;
   Timer? _presencePoll;
   AppUser? _livePeer;
+  bool _showJumpToBottom = false;
 
   @override
   void initState() {
@@ -57,11 +58,22 @@ class _ChatPaneState extends State<ChatPane> {
     });
     _load();
     _poll = Timer.periodic(const Duration(seconds: 3), (_) => _pollNew());
+    _scroll.addListener(_onScroll);
     _refreshPeerPresence();
     _presencePoll = Timer.periodic(
       const Duration(seconds: 15),
       (_) => _refreshPeerPresence(),
     );
+  }
+
+  void _onScroll() {
+    if (!_scroll.hasClients) return;
+    final pos = _scroll.position;
+    final distance = pos.maxScrollExtent - pos.pixels;
+    final shouldShow = distance > 240;
+    if (shouldShow != _showJumpToBottom) {
+      setState(() => _showJumpToBottom = shouldShow);
+    }
   }
 
   Future<void> _refreshPeerPresence() async {
@@ -480,6 +492,18 @@ class _ChatPaneState extends State<ChatPane> {
     );
   }
 
+  bool _isPeerOnline(AppUser me) {
+    if (widget.chat.isGroup) return false;
+    final peer = _livePeer ??
+        widget.chat.members.firstWhere(
+          (m) => m.id != me.id,
+          orElse: () => widget.chat.members.first,
+        );
+    final seen = peer.lastSeen;
+    if (seen == null) return false;
+    return DateTime.now().difference(seen).inSeconds < 60;
+  }
+
   String? _presenceText(AppUser peer) {
     final seen = peer.lastSeen;
     if (seen == null) return null;
@@ -554,6 +578,7 @@ class _ChatPaneState extends State<ChatPane> {
               LoopAvatar(
                 initials: widget.chat.displayInitials(me.id),
                 size: 40,
+                online: !widget.chat.isGroup && _isPeerOnline(me),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -627,7 +652,8 @@ class _ChatPaneState extends State<ChatPane> {
           ),
         ),
         Expanded(
-          child: Container(
+          child: Stack(children: [
+            Container(
             decoration: const BoxDecoration(color: WAColors.chatBgLight),
             child: _loading
                 ? ListView.builder(
@@ -747,6 +773,37 @@ class _ChatPaneState extends State<ChatPane> {
                     },
                   ),
           ),
+            Positioned(
+              right: 16,
+              bottom: 16,
+              child: AnimatedSlide(
+                duration: const Duration(milliseconds: 180),
+                offset: _showJumpToBottom ? Offset.zero : const Offset(0, 1.6),
+                curve: Curves.easeOut,
+                child: AnimatedOpacity(
+                  duration: const Duration(milliseconds: 180),
+                  opacity: _showJumpToBottom ? 1 : 0,
+                  child: Material(
+                    color: Colors.white,
+                    shape: const CircleBorder(),
+                    elevation: 4,
+                    child: InkWell(
+                      customBorder: const CircleBorder(),
+                      onTap: _scrollToBottom,
+                      child: const SizedBox(
+                        width: 42,
+                        height: 42,
+                        child: Icon(
+                          Icons.keyboard_arrow_down,
+                          color: WAColors.mutedLight,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ]),
         ),
         Container(
           color: WAColors.panelLight,

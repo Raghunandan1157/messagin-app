@@ -424,6 +424,17 @@ class _ChatRow extends StatelessWidget {
     return '${local.day}/${local.month}/${local.year.toString().substring(2)}';
   }
 
+  bool _peerOnline() {
+    if (chat.isGroup) return false;
+    for (final m in chat.members) {
+      if (m.id == selfUserId) continue;
+      final seen = m.lastSeen;
+      if (seen == null) return false;
+      return DateTime.now().difference(seen).inSeconds < 60;
+    }
+    return false;
+  }
+
   @override
   Widget build(BuildContext context) {
     final isMine = chat.lastMessageSenderId == selfUserId;
@@ -436,7 +447,11 @@ class _ChatRow extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
-            LoopAvatar(initials: chat.displayInitials(selfUserId), size: 49),
+            LoopAvatar(
+              initials: chat.displayInitials(selfUserId),
+              size: 49,
+              online: _peerOnline(),
+            ),
             const SizedBox(width: 12),
             Expanded(
               child: Column(

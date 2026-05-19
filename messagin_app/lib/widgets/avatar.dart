@@ -5,7 +5,14 @@ class LoopAvatar extends StatelessWidget {
   final String initials;
   final double size;
   final Color? color;
-  const LoopAvatar({super.key, required this.initials, this.size = 44, this.color});
+  final bool online;
+  const LoopAvatar({
+    super.key,
+    required this.initials,
+    this.size = 44,
+    this.color,
+    this.online = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -19,21 +26,42 @@ class LoopAvatar extends StatelessWidget {
       const Color(0xFF2DAB6B),
     ];
     final bg = color ?? palette[hash % palette.length];
-    return Container(
+    final dotSize = (size * 0.28).clamp(8.0, 16.0);
+    return SizedBox(
       width: size,
       height: size,
-      decoration: BoxDecoration(
-        color: bg,
-        shape: BoxShape.circle,
-      ),
-      alignment: Alignment.center,
-      child: Text(
-        initials,
-        style: TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.w600,
-          fontSize: size * 0.4,
-        ),
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            width: size,
+            height: size,
+            decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
+            alignment: Alignment.center,
+            child: Text(
+              initials,
+              style: TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+                fontSize: size * 0.4,
+              ),
+            ),
+          ),
+          if (online)
+            Positioned(
+              right: 0,
+              bottom: 0,
+              child: Container(
+                width: dotSize,
+                height: dotSize,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF22C55E),
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
