@@ -473,7 +473,7 @@ class _ServerDownBanner extends StatelessWidget {
             const Expanded(
               child: Text(
                 'Calls offline — server not running. '
-                'Type `messagin-server` in terminal to start.',
+                'Type `call` in terminal to start.',
                 style: TextStyle(fontSize: 13, color: Color(0xFF54656F)),
               ),
             ),

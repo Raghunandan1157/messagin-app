@@ -104,10 +104,21 @@ function removeFromRoom(ws) {
 
 // --- HTTP --------------------------------------------------------------
 
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+};
+
 const httpServer = http.createServer((req, res) => {
   const url = req.url || '/';
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, CORS_HEADERS);
+    res.end();
+    return;
+  }
   if (req.method === 'GET' && url === '/health') {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.writeHead(200, { ...CORS_HEADERS, 'Content-Type': 'application/json' });
     res.end(JSON.stringify({
       status: 'up',
       rooms: rooms.size,
@@ -117,16 +128,16 @@ const httpServer = http.createServer((req, res) => {
     return;
   }
   if (req.method === 'GET' && url === '/url') {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.writeHead(200, { ...CORS_HEADERS, 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ wss: publicUrl() }));
     return;
   }
   if (req.method === 'GET' && url === '/') {
-    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.writeHead(200, { ...CORS_HEADERS, 'Content-Type': 'text/plain' });
     res.end('messagin-signal up — GET /health or /url, or connect via WebSocket\n');
     return;
   }
-  res.writeHead(404, { 'Content-Type': 'application/json' });
+  res.writeHead(404, { ...CORS_HEADERS, 'Content-Type': 'application/json' });
   res.end(JSON.stringify({ error: 'not_found', url }));
 });
 

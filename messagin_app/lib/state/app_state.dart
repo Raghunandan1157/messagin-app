@@ -53,8 +53,8 @@ class AppState extends ChangeNotifier {
     );
   }
 
-  Future<String> _signalingHttpBase() async {
-    // Prefer the ngrok override file the signaling-server task writes.
+  Future<String?> _signalingHttpBase() async {
+    // 1. Native: prefer the local override file the `call` shortcut writes.
     if (!kIsWeb) {
       try {
         final home = Platform.environment['HOME'] ??
@@ -65,11 +65,38 @@ class AppState extends ChangeNotifier {
             final j = jsonDecode(await f.readAsString());
             final https = (j is Map ? j['https'] : null) as String?;
             if (https != null && https.isNotEmpty) return https;
+            final wss = (j is Map ? j['wss'] : null) as String?;
+            if (wss != null && wss.isNotEmpty) {
+              return wss
+                  .replaceFirst(RegExp(r'^wss://'), 'https://')
+                  .replaceFirst(RegExp(r'^ws://'), 'http://');
+            }
           }
         }
       } catch (_) {}
     }
-    // Derive HTTP base from the WSS URL.
+    // 2. Native fallback + web: ask Vercel for the current published WSS.
+    try {
+      final apiBase = dotenv.env['API_ENDPOINT']
+              ?.replaceFirst(RegExp(r'/api/sql$'), '') ??
+          '';
+      if (apiBase.isNotEmpty) {
+        final resp = await http
+            .get(Uri.parse('$apiBase/api/signal-url'))
+            .timeout(const Duration(seconds: 4));
+        if (resp.statusCode == 200) {
+          final j = jsonDecode(resp.body) as Map<String, dynamic>;
+          final wss = j['wss'] as String?;
+          if (wss != null && wss.isNotEmpty) {
+            return wss
+                .replaceFirst(RegExp(r'^wss://'), 'https://')
+                .replaceFirst(RegExp(r'^ws://'), 'http://');
+          }
+        }
+      }
+    } catch (_) {}
+    // 3. Web has no localhost to fall back to — report no-base.
+    if (kIsWeb) return null;
     final wss = dotenv.env['SIGNAL_WSS_URL'] ?? 'ws://localhost:8787';
     return wss
         .replaceFirst(RegExp(r'^ws://'), 'http://')
@@ -79,6 +106,10 @@ class AppState extends ChangeNotifier {
   Future<void> _checkServerHealth() async {
     try {
       final base = await _signalingHttpBase();
+      if (base == null || base.isEmpty) {
+        _setServerHealthy(false);
+        return;
+      }
       final uri = Uri.parse('$base/health');
       final resp = await http
           .get(uri)
