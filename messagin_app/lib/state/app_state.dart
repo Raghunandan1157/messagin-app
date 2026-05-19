@@ -1,4 +1,10 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/foundation.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../db/local_cache.dart';
 import '../db/neon_client.dart';
@@ -13,6 +19,18 @@ class AppState extends ChangeNotifier {
   late final Repository repo;
   final LocalCache cache = LocalCache();
 
+  // --- Signaling server health ---
+  bool serverHealthy = true;
+  bool _bannerDismissed = false;
+  DateTime? _bannerDismissedAt;
+  Timer? _healthTimer;
+  bool get showServerDownBanner =>
+      !serverHealthy &&
+      (!_bannerDismissed ||
+          (_bannerDismissedAt != null &&
+              DateTime.now().difference(_bannerDismissedAt!) >
+                  const Duration(minutes: 5)));
+
   List<AppUser> _contacts = [];
   bool _contactsLoaded = false;
   bool _contactsLoading = false;
@@ -23,6 +41,76 @@ class AppState extends ChangeNotifier {
   AppState() {
     repo = Repository(NeonClient.instance);
     _bootstrap();
+    _startHealthPolling();
+  }
+
+  void _startHealthPolling() {
+    _checkServerHealth();
+    _healthTimer?.cancel();
+    _healthTimer = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) => _checkServerHealth(),
+    );
+  }
+
+  Future<String> _signalingHttpBase() async {
+    // Prefer the ngrok override file the signaling-server task writes.
+    if (!kIsWeb) {
+      try {
+        final home = Platform.environment['HOME'] ??
+            Platform.environment['USERPROFILE'];
+        if (home != null) {
+          final f = File('$home/.messagin-signal.json');
+          if (await f.exists()) {
+            final j = jsonDecode(await f.readAsString());
+            final https = (j is Map ? j['https'] : null) as String?;
+            if (https != null && https.isNotEmpty) return https;
+          }
+        }
+      } catch (_) {}
+    }
+    // Derive HTTP base from the WSS URL.
+    final wss = dotenv.env['SIGNAL_WSS_URL'] ?? 'ws://localhost:8787';
+    return wss
+        .replaceFirst(RegExp(r'^ws://'), 'http://')
+        .replaceFirst(RegExp(r'^wss://'), 'https://');
+  }
+
+  Future<void> _checkServerHealth() async {
+    try {
+      final base = await _signalingHttpBase();
+      final uri = Uri.parse('$base/health');
+      final resp = await http
+          .get(uri)
+          .timeout(const Duration(seconds: 4));
+      final healthy = resp.statusCode >= 200 && resp.statusCode < 400;
+      _setServerHealthy(healthy);
+    } catch (_) {
+      _setServerHealthy(false);
+    }
+  }
+
+  void _setServerHealthy(bool healthy) {
+    if (serverHealthy == healthy) return;
+    serverHealthy = healthy;
+    if (healthy) {
+      // Reset dismissal so the next outage shows the banner again.
+      _bannerDismissed = false;
+      _bannerDismissedAt = null;
+    }
+    notifyListeners();
+  }
+
+  void dismissServerDownBanner() {
+    _bannerDismissed = true;
+    _bannerDismissedAt = DateTime.now();
+    notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _healthTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _bootstrap() async {

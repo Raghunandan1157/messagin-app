@@ -86,3 +86,4 @@ Chat_APP.zip
 *.swp
 *~
 .vercel
+.gstack/

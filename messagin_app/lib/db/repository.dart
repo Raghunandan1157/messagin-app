@@ -102,33 +102,40 @@ class Repository {
   }
 
   Future<Chat> createDirectChat(String userId, String otherUserId, {AppUser? me, AppUser? other}) async {
-    // Single round-trip: find-or-create the direct chat. Uses CTEs so we
-    // only pay one Neon hop instead of 4.
+    // Compute the normalized pair key on the client: sort the two UUIDs and
+    // join with '|'. The DB has a partial unique index on
+    //   chats(direct_pair_key) WHERE is_group = false AND direct_pair_key IS NOT NULL
+    // so this is the canonical identity of a direct chat. Two concurrent
+    // taps from the same user cannot create two rows — the second hits the
+    // unique constraint and falls through to the existing-row SELECT.
+    final ids = [userId, otherUserId]..sort();
+    final pairKey = '${ids[0]}|${ids[1]}';
+
     final rows = await db.query('''
-      WITH existing AS (
-        SELECT c.id, c.is_group, c.title, c.avatar_url, c.created_at, false AS just_created
-        FROM chats c
-        WHERE c.is_group = false
-          AND EXISTS (SELECT 1 FROM chat_members WHERE chat_id = c.id AND user_id = @a)
-          AND EXISTS (SELECT 1 FROM chat_members WHERE chat_id = c.id AND user_id = @b)
-        LIMIT 1
+      WITH ins AS (
+        INSERT INTO chats (is_group, created_by, direct_pair_key)
+        VALUES (false, @a, @k)
+        ON CONFLICT (direct_pair_key) WHERE is_group = false AND direct_pair_key IS NOT NULL
+        DO NOTHING
+        RETURNING id, is_group, title, avatar_url, created_at
       ),
-      new_chat AS (
-        INSERT INTO chats (is_group, created_by)
-        SELECT false, @a
-        WHERE NOT EXISTS (SELECT 1 FROM existing)
-        RETURNING id, is_group, title, avatar_url, created_at, true AS just_created
+      final_chat AS (
+        SELECT id, is_group, title, avatar_url, created_at FROM ins
+        UNION ALL
+        SELECT id, is_group, title, avatar_url, created_at
+        FROM chats
+        WHERE is_group = false
+          AND direct_pair_key = @k
+          AND NOT EXISTS (SELECT 1 FROM ins)
       ),
-      new_members AS (
+      members_ins AS (
         INSERT INTO chat_members (chat_id, user_id)
-        SELECT id, uid FROM new_chat, unnest(ARRAY[@a, @b]::uuid[]) AS uid
+        SELECT id, uid FROM final_chat, unnest(ARRAY[@a, @b]::uuid[]) AS uid
         ON CONFLICT DO NOTHING
         RETURNING chat_id
       )
-      SELECT * FROM existing
-      UNION ALL
-      SELECT id, is_group, title, avatar_url, created_at, just_created FROM new_chat
-    ''', params: {'a': userId, 'b': otherUserId});
+      SELECT * FROM final_chat
+    ''', params: {'a': userId, 'b': otherUserId, 'k': pairKey});
 
     final row = rows.first;
     final members = (me != null && other != null) ? [me, other] : <AppUser>[];

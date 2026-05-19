@@ -4,6 +4,14 @@
 <dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Messagin app needs camera access for video calls.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Messagin app needs microphone access for voice and video calls.</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>Messagin app uses Bluetooth to route call audio to your headset.</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Messagin app uses Bluetooth to route call audio to your headset.</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>

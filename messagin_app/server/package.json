@@ -1,0 +1,17 @@
+{
+  "name": "messagin-signal",
+  "version": "0.1.0",
+  "private": true,
+  "description": "WebRTC signaling server for Messagin app (room-per-call, WS + tiny HTTP).",
+  "main": "signal.js",
+  "scripts": {
+    "start": "node signal.js",
+    "smoke": "curl -s http://127.0.0.1:8787/health"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

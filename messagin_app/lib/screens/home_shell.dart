@@ -6,6 +6,7 @@ import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/avatar.dart';
 import '../widgets/skeletons.dart';
+import 'ai_screen.dart';
 import 'chat_pane.dart';
 import 'chat_screen.dart';
 import 'new_chat_screen.dart';
@@ -87,8 +88,14 @@ class _HomeShellState extends State<HomeShell> {
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (ctx, constraints) {
       final wide = constraints.maxWidth >= 900;
-      if (wide) return _buildWide();
-      return _buildNarrow();
+      final shell = wide ? _buildWide() : _buildNarrow();
+      return Material(
+        color: WAColors.sidebarLight,
+        child: Column(children: [
+          const _ServerDownBanner(),
+          Expanded(child: shell),
+        ]),
+      );
     });
   }
 
@@ -120,13 +127,11 @@ class _HomeShellState extends State<HomeShell> {
     return Scaffold(
       backgroundColor: WAColors.sidebarLight,
       body: _sidebar(narrow: true),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () async {
-          await Navigator.push(context, MaterialPageRoute(builder: (_) => const NewChatScreen()));
-          _load();
-        },
-        backgroundColor: WAColors.brand,
-        child: const Icon(Icons.chat, color: Colors.white),
+      floatingActionButton: _AiFab(
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const AiScreen()),
+        ),
       ),
     );
   }
@@ -147,6 +152,12 @@ class _HomeShellState extends State<HomeShell> {
               child: LoopAvatar(initials: me.initials, size: 40),
             ),
             const Spacer(),
+            _AiSidebarBtn(
+              onTap: () => Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AiScreen()),
+              ),
+            ),
             _iconBtn(Icons.groups_2_outlined, 'Communities'),
             _iconBtn(Icons.donut_large_outlined, 'Status'),
             _iconBtn(Icons.chat_outlined, 'New chat', onTap: () async {
@@ -436,6 +447,123 @@ class _EmptyChatPane extends StatelessWidget {
           ),
         ),
       ]),
+    );
+  }
+}
+
+/// Slim banner shown at the very top of HomeShell when the signaling server
+/// (calls backend) is unreachable. Tappable dismiss; reappears after 5 min if
+/// still down (logic lives in AppState.showServerDownBanner).
+class _ServerDownBanner extends StatelessWidget {
+  const _ServerDownBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    final state = context.watch<AppState>();
+    if (!state.showServerDownBanner) return const SizedBox.shrink();
+    return Material(
+      color: const Color(0xFFFFF3C4),
+      child: SafeArea(
+        bottom: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          child: Row(children: [
+            const Icon(Icons.cloud_off, size: 18, color: Color(0xFF54656F)),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Text(
+                'Calls offline — server not running. '
+                'Type `messagin-server` in terminal to start.',
+                style: TextStyle(fontSize: 13, color: Color(0xFF54656F)),
+              ),
+            ),
+            IconButton(
+              icon: const Icon(Icons.close, size: 18, color: Color(0xFF54656F)),
+              tooltip: 'Dismiss',
+              onPressed: () => state.dismissServerDownBanner(),
+              visualDensity: VisualDensity.compact,
+            ),
+          ]),
+        ),
+      ),
+    );
+  }
+}
+
+/// Brand-gradient FAB shown on the narrow home screen. Tapping opens AiScreen.
+class _AiFab extends StatelessWidget {
+  final VoidCallback onTap;
+  const _AiFab({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        customBorder: const CircleBorder(),
+        child: Container(
+          width: 56,
+          height: 56,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            gradient: const LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [WAColors.brand, WAColors.brandDark],
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: WAColors.brand.withValues(alpha: 0.35),
+                blurRadius: 12,
+                offset: const Offset(0, 4),
+              ),
+            ],
+          ),
+          child: const Icon(Icons.auto_awesome, color: Colors.white, size: 26),
+        ),
+      ),
+    );
+  }
+}
+
+/// Compact gradient AI button for the sidebar header (used in wide layout
+/// where there is no FAB).
+class _AiSidebarBtn extends StatelessWidget {
+  final VoidCallback onTap;
+  const _AiSidebarBtn({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Tooltip(
+        message: 'AI Assistant',
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: onTap,
+          child: Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: const LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [WAColors.brand, WAColors.brandDark],
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: WAColors.brand.withValues(alpha: 0.25),
+                  blurRadius: 6,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: const Icon(Icons.auto_awesome, color: Colors.white, size: 18),
+          ),
+        ),
+      ),
     );
   }
 }

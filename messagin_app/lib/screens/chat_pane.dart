@@ -2,15 +2,18 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:uuid/uuid.dart';
+import '../calls/call_controller.dart';
 import '../models/chat.dart';
 import '../models/message.dart';
 import '../models/reaction.dart';
+import '../models/user.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
 import '../widgets/avatar.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/reaction_picker.dart';
 import '../widgets/skeletons.dart';
+import 'call_screen.dart';
 
 const _uuid = Uuid();
 
@@ -176,6 +179,34 @@ class _ChatPaneState extends State<ChatPane> {
     }
   }
 
+  Future<void> _startCall({required bool video}) async {
+    final state = context.read<AppState>();
+    final me = state.me!;
+    final peer = widget.chat.members.firstWhere(
+      (m) => m.id != me.id,
+      orElse: () => AppUser(id: '', phone: '', name: 'Unknown'),
+    );
+    if (peer.id.isEmpty) return;
+    CallController? ctrl;
+    try {
+      ctrl = context.read<CallController>();
+    } catch (_) {
+      // CallController not yet injected (no signed-in user / signaling not up).
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Calls unavailable — signaling not ready.')),
+      );
+      return;
+    }
+    await ctrl.start(chatId: widget.chat.id, peerUserId: peer.id, video: video);
+    if (!mounted) return;
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => ChangeNotifierProvider<CallController>.value(
+        value: ctrl!,
+        child: CallScreen(peerName: peer.name, peerInitials: peer.initials),
+      ),
+    ));
+  }
+
   Future<void> _onLongPress(Message m, Offset pos) async {
     final picked = await showReactionPicker(context, pos);
     if (picked == null) return;
@@ -258,6 +289,18 @@ class _ChatPaneState extends State<ChatPane> {
               ],
             ),
           ),
+          if (!widget.chat.isGroup) ...[
+            IconButton(
+              icon: const Icon(Icons.videocam_outlined, color: WAColors.mutedLight),
+              tooltip: 'Video call',
+              onPressed: () => _startCall(video: true),
+            ),
+            IconButton(
+              icon: const Icon(Icons.call_outlined, color: WAColors.mutedLight),
+              tooltip: 'Voice call',
+              onPressed: () => _startCall(video: false),
+            ),
+          ],
           IconButton(icon: const Icon(Icons.search, color: WAColors.mutedLight), onPressed: () {}),
           IconButton(icon: const Icon(Icons.more_vert, color: WAColors.mutedLight), onPressed: () {}),
         ]),
