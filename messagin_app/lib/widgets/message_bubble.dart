@@ -48,10 +48,12 @@ class MessageBubble extends StatelessWidget {
       bottomRight: const Radius.circular(7.5),
     );
 
+    final screenW = MediaQuery.of(context).size.width;
+    final bubbleMaxWidth = (screenW * 0.65).clamp(140.0, 520.0);
     final bubble = GestureDetector(
       onLongPressStart: (d) => onLongPress?.call(d.globalPosition),
       child: Container(
-        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.65),
+        constraints: BoxConstraints(maxWidth: bubbleMaxWidth),
         margin: EdgeInsets.only(
           top: 1,
           bottom: 1,
@@ -164,8 +166,6 @@ class MessageBubble extends StatelessWidget {
   Widget _bubbleContent(Color fg) {
     final body = message.body ?? '';
     final timeText = DateFormat.jm().format(message.createdAt.toLocal());
-    final approxBodyWidth = body.length * 8.0;
-    final inline = approxBodyWidth > 60 && approxBodyWidth < 380;
 
     final time = Row(mainAxisSize: MainAxisSize.min, children: [
       Text(timeText, style: TextStyle(fontSize: 11, color: WAColors.mutedLight)),
@@ -175,21 +175,13 @@ class MessageBubble extends StatelessWidget {
       ],
     ]);
 
-    if (inline) {
-      return Wrap(
-        crossAxisAlignment: WrapCrossAlignment.end,
-        children: [
-          Text(body, style: TextStyle(color: fg, fontSize: 14.5, height: 1.35)),
-          const SizedBox(width: 8),
-          Padding(padding: const EdgeInsets.only(top: 2), child: time),
-        ],
-      );
-    }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Wrap(
+      alignment: WrapAlignment.end,
+      crossAxisAlignment: WrapCrossAlignment.end,
       children: [
         Text(body, style: TextStyle(color: fg, fontSize: 14.5, height: 1.35)),
-        Align(alignment: Alignment.bottomRight, child: time),
+        const SizedBox(width: 8),
+        Padding(padding: const EdgeInsets.only(top: 2), child: time),
       ],
     );
   }

@@ -454,6 +454,30 @@ class _ChatPaneState extends State<ChatPane> {
     );
   }
 
+  String? _presenceText(AppUser peer) {
+    final seen = peer.lastSeen;
+    if (seen == null) return null;
+    final now = DateTime.now();
+    final diff = now.difference(seen);
+    if (diff.inSeconds < 60) return 'online';
+    if (diff.inMinutes < 60) return 'last seen ${diff.inMinutes} min ago';
+    final local = seen.toLocal();
+    final today = DateTime(now.year, now.month, now.day);
+    final seenDay = DateTime(local.year, local.month, local.day);
+    final h = local.hour;
+    final m = local.minute.toString().padLeft(2, '0');
+    final hh = h == 0 ? 12 : (h > 12 ? h - 12 : h);
+    final ampm = h >= 12 ? 'PM' : 'AM';
+    final timeStr = '$hh:$m $ampm';
+    if (seenDay == today) return 'last seen today at $timeStr';
+    if (seenDay == today.subtract(const Duration(days: 1))) {
+      return 'last seen yesterday at $timeStr';
+    }
+    final d = local.day.toString().padLeft(2, '0');
+    final mo = local.month.toString().padLeft(2, '0');
+    return 'last seen $d/$mo at $timeStr';
+  }
+
   Widget _buildEncryptionBanner() {
     return Center(
       child: Container(
@@ -519,19 +543,30 @@ class _ChatPaneState extends State<ChatPane> {
                         color: WAColors.inkLight,
                       ),
                     ),
-                    Text(
-                      widget.chat.isGroup
+                    Builder(builder: (_) {
+                      final subtitle = widget.chat.isGroup
                           ? widget.chat.members
                                 .map((m) => m.id == me.id ? 'You' : m.name)
                                 .join(', ')
-                          : 'online',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: WAColors.mutedLight,
-                      ),
-                    ),
+                          : _presenceText(
+                              widget.chat.members.firstWhere(
+                                (m) => m.id != me.id,
+                                orElse: () => widget.chat.members.first,
+                              ),
+                            );
+                      if (subtitle == null || subtitle.isEmpty) {
+                        return const SizedBox.shrink();
+                      }
+                      return Text(
+                        subtitle,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: WAColors.mutedLight,
+                        ),
+                      );
+                    }),
                   ],
                 ),
               ),
