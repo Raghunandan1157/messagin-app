@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../calls/signal_endpoint.dart';
@@ -9,7 +10,7 @@ import '../db/neon_client.dart';
 import '../db/repository.dart';
 import '../models/user.dart';
 
-class AppState extends ChangeNotifier {
+class AppState extends ChangeNotifier with WidgetsBindingObserver {
   AppUser? me;
   bool initializing = true;
   bool justSignedIn = false;
@@ -36,10 +37,39 @@ class AppState extends ChangeNotifier {
 
   static const String universalOtp = '1234';
 
+  Timer? _presenceTimer;
+
   AppState() {
     repo = Repository(NeonClient.instance);
     _bootstrap();
     _startHealthPolling();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  void _startPresenceHeartbeat() {
+    _presenceTimer?.cancel();
+    _touchPresence();
+    _presenceTimer = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) => _touchPresence(),
+    );
+  }
+
+  Future<void> _touchPresence() async {
+    final uid = me?.id;
+    if (uid == null) return;
+    try {
+      await repo.touchPresence(uid);
+    } catch (e) {
+      debugPrint('touchPresence failed: $e');
+    }
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _touchPresence();
+    }
   }
 
   void _startHealthPolling() {
@@ -108,6 +138,8 @@ class AppState extends ChangeNotifier {
   @override
   void dispose() {
     _healthTimer?.cancel();
+    _presenceTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
@@ -144,6 +176,7 @@ class AppState extends ChangeNotifier {
       // first paint + initial listChatsFor on a single shared pg connection.
       if (me != null) {
         _preloadContactsAfter(const Duration(milliseconds: 1500));
+        _startPresenceHeartbeat();
       }
     }
   }
@@ -164,6 +197,7 @@ class AppState extends ChangeNotifier {
     // doesn't trigger listChatsFor (HomeShell does that post-splash), so
     // no contention.
     _preloadContactsAfter(Duration.zero);
+    _startPresenceHeartbeat();
   }
 
   Future<void> resumeExisting(AppUser user) async {
@@ -173,6 +207,7 @@ class AppState extends ChangeNotifier {
     await prefs.setString('me_phone', user.phone);
     notifyListeners();
     _preloadContactsAfter(Duration.zero);
+    _startPresenceHeartbeat();
   }
 
   void clearJustSignedIn() {
@@ -196,6 +231,8 @@ class AppState extends ChangeNotifier {
   Future<void> signOut() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('me_phone');
+    _presenceTimer?.cancel();
+    _presenceTimer = null;
     me = null;
     _contacts = [];
     _contactsLoaded = false;

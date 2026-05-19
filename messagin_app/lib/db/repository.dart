@@ -23,6 +23,22 @@ class Repository {
     return AppUser.fromRow(rows.first);
   }
 
+  Future<AppUser?> userById(String id) async {
+    final rows = await db.query(
+      'SELECT * FROM users WHERE id = @id',
+      params: {'id': id},
+    );
+    if (rows.isEmpty) return null;
+    return AppUser.fromRow(rows.first);
+  }
+
+  Future<void> touchPresence(String userId) async {
+    await db.query(
+      'UPDATE users SET last_seen = now() WHERE id = @id',
+      params: {'id': userId},
+    );
+  }
+
   Future<AppUser> upsertUser(String phone, String name) async {
     final rows = await db.query(
       '''INSERT INTO users (phone, name) VALUES (@phone, @name)
@@ -55,7 +71,8 @@ class Repository {
           json_agg(json_build_object(
             'id', u.id, 'phone', u.phone, 'name', u.name,
             'avatar_url', u.avatar_url, 'about', u.about,
-            'emp_id', u.emp_id, 'role', u.role, 'location', u.location
+            'emp_id', u.emp_id, 'role', u.role, 'location', u.location,
+            'last_seen', u.last_seen
           )) AS member_json
         FROM chat_members cm
         JOIN users u ON u.id = cm.user_id

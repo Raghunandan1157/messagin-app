@@ -45,6 +45,8 @@ class _ChatPaneState extends State<ChatPane> {
   bool _hasText = false;
   bool _polling = false;
   Timer? _poll;
+  Timer? _presencePoll;
+  AppUser? _livePeer;
 
   @override
   void initState() {
@@ -55,6 +57,29 @@ class _ChatPaneState extends State<ChatPane> {
     });
     _load();
     _poll = Timer.periodic(const Duration(seconds: 3), (_) => _pollNew());
+    _refreshPeerPresence();
+    _presencePoll = Timer.periodic(
+      const Duration(seconds: 15),
+      (_) => _refreshPeerPresence(),
+    );
+  }
+
+  Future<void> _refreshPeerPresence() async {
+    if (widget.chat.isGroup) return;
+    final me = context.read<AppState>().me;
+    if (me == null) return;
+    final peer = widget.chat.members.firstWhere(
+      (m) => m.id != me.id,
+      orElse: () => widget.chat.members.first,
+    );
+    if (peer.id.isEmpty || peer.id == me.id) return;
+    try {
+      final fresh = await context.read<AppState>().repo.userById(peer.id);
+      if (!mounted || fresh == null) return;
+      setState(() => _livePeer = fresh);
+    } catch (e) {
+      debugPrint('peer presence refresh failed: $e');
+    }
   }
 
   @override
@@ -72,6 +97,7 @@ class _ChatPaneState extends State<ChatPane> {
   @override
   void dispose() {
     _poll?.cancel();
+    _presencePoll?.cancel();
     _input.dispose();
     _scroll.dispose();
     super.dispose();
@@ -549,10 +575,11 @@ class _ChatPaneState extends State<ChatPane> {
                                 .map((m) => m.id == me.id ? 'You' : m.name)
                                 .join(', ')
                           : _presenceText(
-                              widget.chat.members.firstWhere(
-                                (m) => m.id != me.id,
-                                orElse: () => widget.chat.members.first,
-                              ),
+                              _livePeer ??
+                                  widget.chat.members.firstWhere(
+                                    (m) => m.id != me.id,
+                                    orElse: () => widget.chat.members.first,
+                                  ),
                             );
                       if (subtitle == null || subtitle.isEmpty) {
                         return const SizedBox.shrink();

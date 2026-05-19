@@ -27,11 +27,18 @@ class AppUser {
         name: row['name'] as String,
         avatarUrl: row['avatar_url'] as String?,
         about: row['about'] as String?,
-        lastSeen: row['last_seen'] as DateTime?,
+        lastSeen: _parseLastSeen(row['last_seen']),
         empId: row['emp_id'] as String?,
         role: row['role'] as String?,
         location: row['location'] as String?,
       );
+
+  static DateTime? _parseLastSeen(dynamic v) {
+    if (v == null) return null;
+    if (v is DateTime) return v;
+    if (v is String) return DateTime.tryParse(v);
+    return null;
+  }
 
   String get tagline {
     final bits = <String>[];
