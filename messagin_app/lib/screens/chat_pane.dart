@@ -106,7 +106,7 @@ class _ChatPaneState extends State<ChatPane> {
                 _messages.where((x) => x.kind == 'text').length;
             _listKey.currentState?.insertItem(
               visibleCount,
-              duration: const Duration(milliseconds: 300),
+              duration: const Duration(milliseconds: 350),
             );
           }
         }
@@ -153,7 +153,7 @@ class _ChatPaneState extends State<ChatPane> {
                   _messages.where((x) => x.kind == 'text').length;
               _listKey.currentState?.insertItem(
                 visibleCount,
-                duration: const Duration(milliseconds: 300),
+                duration: const Duration(milliseconds: 350),
               );
             }
           }
@@ -207,7 +207,7 @@ class _ChatPaneState extends State<ChatPane> {
     final visibleCount = _messages.where((m) => m.kind == 'text').length;
     _listKey.currentState?.insertItem(
       visibleCount,
-      duration: const Duration(milliseconds: 300),
+      duration: const Duration(milliseconds: 350),
     );
     _scrollToBottom();
 
@@ -224,7 +224,7 @@ class _ChatPaneState extends State<ChatPane> {
               _messages.where((x) => x.kind == 'text').length;
           _listKey.currentState?.insertItem(
             newVisibleCount,
-            duration: const Duration(milliseconds: 300),
+            duration: const Duration(milliseconds: 350),
           );
         }
       });
@@ -395,17 +395,30 @@ class _ChatPaneState extends State<ChatPane> {
   }
 
   Widget _buildInsertAnimation(Widget child, Animation<double> animation) {
-    final curved = CurvedAnimation(parent: animation, curve: Curves.elasticOut);
-    return FadeTransition(
-      opacity: curved,
-      child: SlideTransition(
-        position: Tween<Offset>(begin: const Offset(0, 0.3), end: Offset.zero)
-            .animate(curved),
-        child: ScaleTransition(
-          scale: Tween<double>(begin: 0.9, end: 1.0).animate(curved),
-          child: child,
-        ),
-      ),
+    final scaleAnim = Tween<double>(begin: 0.8, end: 1.0).animate(
+      CurvedAnimation(parent: animation, curve: Curves.easeOutBack),
+    );
+    final fadeAnim = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: animation, curve: Curves.easeOut),
+    );
+    final translateAnim = Tween<double>(begin: 20.0, end: 0.0).animate(
+      CurvedAnimation(parent: animation, curve: Curves.easeOut),
+    );
+
+    return AnimatedBuilder(
+      animation: animation,
+      builder: (context, _) {
+        return Opacity(
+          opacity: fadeAnim.value,
+          child: Transform.translate(
+            offset: Offset(0, translateAnim.value),
+            child: Transform.scale(
+              scale: scaleAnim.value,
+              child: child,
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -720,9 +733,51 @@ class _ChatPaneState extends State<ChatPane> {
                 ),
               ),
               const SizedBox(width: 8),
-              _SendButton(
-                hasText: _hasText,
-                onSend: _send,
+              Material(
+                color: Colors.transparent,
+                shape: const CircleBorder(),
+                clipBehavior: Clip.antiAlias,
+                child: InkWell(
+                  onTap: _hasText ? _send : null,
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 200),
+                    transitionBuilder: (child, animation) {
+                      final rotate = Tween<double>(
+                        begin: 0.75,
+                        end: 1.0,
+                      ).animate(
+                        CurvedAnimation(
+                          parent: animation,
+                          curve: Curves.easeOut,
+                        ),
+                      );
+                      return RotationTransition(
+                        turns: rotate,
+                        child: FadeTransition(
+                          opacity: animation,
+                          child: child,
+                        ),
+                      );
+                    },
+                    child: Container(
+                      key: ValueKey<bool>(_hasText),
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: _hasText
+                            ? WAColors.brandDark
+                            : Colors.transparent,
+                        shape: BoxShape.circle,
+                      ),
+                      alignment: Alignment.center,
+                      child: Icon(
+                        _hasText ? Icons.send : Icons.mic_none,
+                        color: _hasText ? Colors.white : WAColors.brandDark,
+                        size: 24,
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ],
           ),
@@ -746,69 +801,6 @@ class _ChatPaneState extends State<ChatPane> {
       return Container(color: WAColors.chatBgLight, child: faded);
     }
     return Scaffold(body: faded);
-  }
-}
-
-class _SendButton extends StatelessWidget {
-  final bool hasText;
-  final VoidCallback onSend;
-
-  const _SendButton({required this.hasText, required this.onSend});
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedSwitcher(
-      duration: const Duration(milliseconds: 220),
-      transitionBuilder: (child, anim) {
-        final rotate = Tween<double>(begin: -0.5, end: 0.0).animate(
-          CurvedAnimation(parent: anim, curve: Curves.easeOutBack),
-        );
-        final scale = Tween<double>(begin: 0.6, end: 1.0).animate(
-          CurvedAnimation(parent: anim, curve: Curves.easeOutBack),
-        );
-        return RotationTransition(
-          turns: rotate,
-          child: ScaleTransition(
-            scale: scale,
-            child: FadeTransition(
-              opacity: anim,
-              child: child,
-            ),
-          ),
-        );
-      },
-      child: hasText
-          ? Material(
-              key: const ValueKey('send'),
-              color: WAColors.brandDark,
-              borderRadius: BorderRadius.circular(22),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(22),
-                onTap: onSend,
-                child: Container(
-                  width: 44,
-                  height: 44,
-                  alignment: Alignment.center,
-                  child: const Icon(
-                    Icons.send,
-                    color: Colors.white,
-                    size: 20,
-                  ),
-                ),
-              ),
-            )
-          : Container(
-              key: const ValueKey('mic'),
-              width: 44,
-              height: 44,
-              alignment: Alignment.center,
-              child: Icon(
-                Icons.mic_none,
-                color: WAColors.mutedLight,
-                size: 26,
-              ),
-            ),
-    );
   }
 }
 
